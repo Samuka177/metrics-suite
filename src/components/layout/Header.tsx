@@ -1,7 +1,8 @@
-import { Beer, Calendar, Maximize2, Minimize2, Printer } from 'lucide-react';
+import { Maximize2, Minimize2, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import logoTuratti from '@/assets/LogoTuratti.png';
 
 interface HeaderProps {
   isFullscreen: boolean;
@@ -14,7 +15,7 @@ export default function Header({ isFullscreen, onToggleFullscreen, onPrint, hasD
   return (
     <header className="sticky top-0 z-50 card-surface px-6 py-3 flex items-center justify-between no-print">
       <div className="flex items-center gap-3">
-        <Beer className="h-7 w-7 text-primary" />
+        <img src={logoTuratti} alt="Turatti Cervejaria" className="h-10 w-auto" />
         <div>
           <h1 className="text-xl font-bold text-foreground">Turatti Cervejaria</h1>
           <p className="text-xs text-muted-foreground">LogiDash — Painel Executivo</p>
