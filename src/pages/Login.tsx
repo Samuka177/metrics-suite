@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Lock, Mail } from 'lucide-react';
-import logoTuratti from '@/assets/LogoTuratti.png';
+import { Lock, Mail, Truck } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -18,7 +17,8 @@ export default function Login() {
 
     setTimeout(() => {
       if (email === 'admin@turatti.com.br' && password === 'Adm@1100') {
-        sessionStorage.setItem('logidash_auth', 'true');
+        sessionStorage.setItem('rotafacil_auth', 'true');
+        sessionStorage.setItem('rotafacil_role', 'gestor');
         toast.success('Login realizado com sucesso!');
         navigate('/');
       } else {
@@ -29,13 +29,15 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-primary/5 to-background">
       <div className="card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in">
-        <div className="flex flex-col items-center gap-4">
-          <img src={logoTuratti} alt="Turatti Cervejaria" className="h-16 w-auto" />
-          <h1 className="text-xl font-bold text-foreground">LogiDash — Acesso</h1>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center">
+            <Truck className="h-8 w-8 text-primary-foreground" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">RotaFácil</h1>
           <p className="text-sm text-muted-foreground text-center">
-            Faça login para acessar o painel de vendas e logística.
+            Sistema de Roteirização e Gestão de Entregas
           </p>
         </div>
 
