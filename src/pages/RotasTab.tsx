@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Plus, MapPin, Clock, Package, ArrowDownUp, CheckCircle2, Truck, Eye, Trash2, Map } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
-import { lazy, Suspense } from 'react';
+
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
