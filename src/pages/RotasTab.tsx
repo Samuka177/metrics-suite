@@ -220,7 +220,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 export default function RotasTab() {
   const { paradas, roteirizar } = useApp();
-  const [showMap, setShowMap] = useMapToggle(true);
+  const [showMap, setShowMap] = useState(true);
   const total = paradas.length;
   const entregues = paradas.filter(p => p.status === 'entregue').length;
   const pendentes = paradas.filter(p => p.status === 'pendente').length;
