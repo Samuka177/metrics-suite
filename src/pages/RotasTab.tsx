@@ -8,9 +8,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Plus, MapPin, Clock, Package, ArrowDownUp, CheckCircle2, Truck, Eye, Trash2 } from 'lucide-react';
+import { Plus, MapPin, Clock, Package, ArrowDownUp, CheckCircle2, Truck, Eye, Trash2, Map } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
+import { lazy, Suspense, useState as useMapToggle } from 'react';
+
+const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
 function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -217,6 +220,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 export default function RotasTab() {
   const { paradas, roteirizar } = useApp();
+  const [showMap, setShowMap] = useMapToggle(true);
   const total = paradas.length;
   const entregues = paradas.filter(p => p.status === 'entregue').length;
   const pendentes = paradas.filter(p => p.status === 'pendente').length;
@@ -229,10 +233,20 @@ export default function RotasTab() {
         <MetricCard label="Pendentes" value={pendentes} color="text-muted-foreground" />
       </div>
 
+      {/* Map */}
+      {showMap && paradas.length > 0 && (
+        <Suspense fallback={<div className="h-[250px] rounded-xl bg-muted animate-pulse" />}>
+          <RouteMap paradas={paradas} />
+        </Suspense>
+      )}
+
       <div className="flex gap-2">
         <AddParadaSheet />
         <Button variant="outline" size="sm" onClick={() => { roteirizar(); toast.success('Rota otimizada com sucesso!'); }}>
           <ArrowDownUp className="h-4 w-4 mr-1" /> Roteirizar
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowMap(v => !v)}>
+          <Map className="h-4 w-4 mr-1" /> {showMap ? 'Ocultar mapa' : 'Ver mapa'}
         </Button>
       </div>
 
