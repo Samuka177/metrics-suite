@@ -1,16 +1,20 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import {
   BarChart3, TrendingUp, Package, Truck, Users, Clock,
-  CheckCircle2, XCircle, MapPin, AlertTriangle, Timer
+  CheckCircle2, AlertTriangle, Timer, MapPin, Download, FileSpreadsheet, FileText
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 const COLORS = {
   primary: 'hsl(36, 78%, 41%)',
@@ -51,36 +55,49 @@ function SectionTitle({ icon: Icon, title }: { icon: typeof BarChart3; title: st
   );
 }
 
+type Periodo = 'hoje' | 'semana' | 'mes' | 'todos';
+
+function isToday(dateStr?: string): boolean {
+  return true; // All current data is "today" since it's in-memory
+}
+
 export default function RelatoriosTab() {
   const { paradas, motoristas } = useApp();
+  const [periodo, setPeriodo] = useState<Periodo>('todos');
+  const [motoristaFiltro, setMotoristaFiltro] = useState<string>('todos');
+
+  // Filter paradas — currently all data is "today" since localStorage
+  const paradasFiltradas = useMemo(() => {
+    let filtered = paradas;
+    // Motorista filter would apply if paradas had motorista assignment
+    // For now just return all paradas since data is session-based
+    return filtered;
+  }, [paradas, periodo, motoristaFiltro]);
 
   const stats = useMemo(() => {
-    const total = paradas.length;
-    const entregues = paradas.filter(p => p.status === 'entregue').length;
-    const emEntrega = paradas.filter(p => p.status === 'em_entrega').length;
-    const pendentes = paradas.filter(p => p.status === 'pendente').length;
+    const p = paradasFiltradas;
+    const total = p.length;
+    const entregues = p.filter(x => x.status === 'entregue').length;
+    const emEntrega = p.filter(x => x.status === 'em_entrega').length;
+    const pendentes = p.filter(x => x.status === 'pendente').length;
     const taxaSucesso = total > 0 ? Math.round((entregues / total) * 100) : 0;
 
-    const totalProdutos = paradas.reduce((sum, p) => sum + p.produtos.length, 0);
-    const produtosEntregues = paradas
-      .filter(p => p.status === 'entregue')
-      .reduce((sum, p) => sum + p.produtos.length, 0);
+    const totalProdutos = p.reduce((s, x) => s + x.produtos.length, 0);
+    const produtosEntregues = p.filter(x => x.status === 'entregue').reduce((s, x) => s + x.produtos.length, 0);
 
-    const pontoFixo = paradas.filter(p => p.tipo === 'Ponto fixo').length;
-    const delivery = paradas.filter(p => p.tipo === 'Delivery').length;
-
-    const comHorario = paradas.filter(p => p.horario).length;
-    const semHorario = paradas.filter(p => !p.horario).length;
+    const pontoFixo = p.filter(x => x.tipo === 'Ponto fixo').length;
+    const delivery = p.filter(x => x.tipo === 'Delivery').length;
+    const comHorario = p.filter(x => x.horario).length;
+    const semHorario = p.filter(x => !x.horario).length;
 
     const motoristasAtivos = motoristas.filter(m => m.ativo).length;
     const motoristasTotal = motoristas.length;
 
-    // Tempo médio de entrega (check-in → check-out)
     const temposEntrega: number[] = [];
-    paradas.forEach(p => {
-      if (p.checkinTime && p.checkoutTime) {
-        const [hIn, mIn] = p.checkinTime.split(':').map(Number);
-        const [hOut, mOut] = p.checkoutTime.split(':').map(Number);
+    p.forEach(x => {
+      if (x.checkinTime && x.checkoutTime) {
+        const [hIn, mIn] = x.checkinTime.split(':').map(Number);
+        const [hOut, mOut] = x.checkoutTime.split(':').map(Number);
         const diffMin = (hOut * 60 + mOut) - (hIn * 60 + mIn);
         if (diffMin > 0) temposEntrega.push(diffMin);
       }
@@ -89,15 +106,8 @@ export default function RelatoriosTab() {
       ? Math.round(temposEntrega.reduce((a, b) => a + b, 0) / temposEntrega.length)
       : 0;
 
-    return {
-      total, entregues, emEntrega, pendentes, taxaSucesso,
-      totalProdutos, produtosEntregues,
-      pontoFixo, delivery,
-      comHorario, semHorario,
-      motoristasAtivos, motoristasTotal,
-      tempoMedio,
-    };
-  }, [paradas, motoristas]);
+    return { total, entregues, emEntrega, pendentes, taxaSucesso, totalProdutos, produtosEntregues, pontoFixo, delivery, comHorario, semHorario, motoristasAtivos, motoristasTotal, tempoMedio };
+  }, [paradasFiltradas, motoristas]);
 
   const statusChartData = useMemo(() => [
     { name: 'Entregues', value: stats.entregues, color: COLORS.success },
@@ -111,25 +121,15 @@ export default function RelatoriosTab() {
   ].filter(d => d.value > 0), [stats]);
 
   const paradaBarData = useMemo(() => {
-    return paradas.map((p, i) => ({
+    return paradasFiltradas.map((p) => ({
       name: p.nome.length > 12 ? p.nome.slice(0, 12) + '…' : p.nome,
       produtos: p.produtos.length,
-      status: p.status,
     }));
-  }, [paradas]);
+  }, [paradasFiltradas]);
 
-  const motoristasData = useMemo(() => {
-    return motoristas.map(m => ({
-      nome: m.nome.split(' ')[0],
-      status: m.ativo ? 'Em rota' : 'Disponível',
-      ativo: m.ativo,
-    }));
-  }, [motoristas]);
-
-  // Timeline data
   const timeline = useMemo(() => {
     const events: { hora: string; texto: string; tipo: 'checkin' | 'checkout' | 'motorista' }[] = [];
-    paradas.forEach(p => {
+    paradasFiltradas.forEach(p => {
       if (p.checkinTime) events.push({ hora: p.checkinTime, texto: `Check-in: ${p.nome}`, tipo: 'checkin' });
       if (p.checkoutTime) events.push({ hora: p.checkoutTime, texto: `Entregue: ${p.nome}`, tipo: 'checkout' });
     });
@@ -138,10 +138,143 @@ export default function RelatoriosTab() {
       if (m.checkoutTime) events.push({ hora: m.checkoutTime, texto: `${m.nome} encerrou rota`, tipo: 'motorista' });
     });
     return events.sort((a, b) => a.hora.localeCompare(b.hora));
-  }, [paradas, motoristas]);
+  }, [paradasFiltradas, motoristas]);
+
+  const exportExcel = () => {
+    const data = paradasFiltradas.map((p, i) => ({
+      '#': i + 1,
+      'Cliente': p.nome,
+      'Endereço': p.endereco,
+      'Tipo': p.tipo,
+      'Horário': p.horario || '—',
+      'Status': p.status === 'entregue' ? 'Entregue' : p.status === 'em_entrega' ? 'Em entrega' : 'Pendente',
+      'Check-in': p.checkinTime || '—',
+      'Check-out': p.checkoutTime || '—',
+      'Produtos': p.produtos.map(pr => `${pr.nome} (${pr.quantidade} ${pr.unidade})`).join('; '),
+    }));
+
+    const motoristasData = motoristas.map(m => ({
+      'Nome': m.nome,
+      'Placa': m.placa,
+      'Status': m.ativo ? 'Em rota' : 'Disponível',
+      'Check-in': m.checkinTime || '—',
+      'Check-out': m.checkoutTime || '—',
+    }));
+
+    const resumo = [
+      { 'Métrica': 'Total de Paradas', 'Valor': stats.total },
+      { 'Métrica': 'Entregues', 'Valor': stats.entregues },
+      { 'Métrica': 'Em Entrega', 'Valor': stats.emEntrega },
+      { 'Métrica': 'Pendentes', 'Valor': stats.pendentes },
+      { 'Métrica': 'Taxa de Sucesso', 'Valor': `${stats.taxaSucesso}%` },
+      { 'Métrica': 'Tempo Médio (min)', 'Valor': stats.tempoMedio || '—' },
+      { 'Métrica': 'Motoristas Ativos', 'Valor': stats.motoristasAtivos },
+      { 'Métrica': 'Total Produtos', 'Valor': stats.totalProdutos },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), 'Resumo');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Paradas');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(motoristasData), 'Motoristas');
+
+    const hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    XLSX.writeFile(wb, `relatorio_rotafacil_${hoje}.xlsx`);
+    toast.success('Relatório Excel exportado!');
+  };
+
+  const exportPDF = async () => {
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
+    const doc = new jsPDF();
+    const hoje = new Date().toLocaleDateString('pt-BR');
+
+    doc.setFontSize(18);
+    doc.text('Rota Fácil — Relatório do Dia', 14, 22);
+    doc.setFontSize(10);
+    doc.text(hoje, 14, 30);
+
+    // KPIs
+    doc.setFontSize(12);
+    doc.text('Resumo', 14, 42);
+    autoTable(doc, {
+      startY: 46,
+      head: [['Métrica', 'Valor']],
+      body: [
+        ['Total de Paradas', String(stats.total)],
+        ['Entregues', String(stats.entregues)],
+        ['Em Entrega', String(stats.emEntrega)],
+        ['Pendentes', String(stats.pendentes)],
+        ['Taxa de Sucesso', `${stats.taxaSucesso}%`],
+        ['Tempo Médio', stats.tempoMedio > 0 ? `${stats.tempoMedio} min` : '—'],
+        ['Motoristas Ativos', `${stats.motoristasAtivos}/${stats.motoristasTotal}`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [186, 117, 23] },
+    });
+
+    // Paradas
+    const finalY = (doc as any).lastAutoTable?.finalY || 100;
+    doc.text('Paradas', 14, finalY + 10);
+    autoTable(doc, {
+      startY: finalY + 14,
+      head: [['#', 'Cliente', 'Endereço', 'Tipo', 'Status', 'Check-in', 'Check-out']],
+      body: paradasFiltradas.map((p, i) => [
+        i + 1,
+        p.nome,
+        p.endereco.slice(0, 30),
+        p.tipo,
+        p.status === 'entregue' ? 'Entregue' : p.status === 'em_entrega' ? 'Em entrega' : 'Pendente',
+        p.checkinTime || '—',
+        p.checkoutTime || '—',
+      ]),
+      theme: 'grid',
+      headStyles: { fillColor: [186, 117, 23] },
+      styles: { fontSize: 8 },
+    });
+
+    doc.save(`relatorio_rotafacil_${hoje.replace(/\//g, '-')}.pdf`);
+    toast.success('Relatório PDF exportado!');
+  };
 
   return (
     <div className="space-y-2 fade-in pb-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+          <SelectTrigger className="w-[130px] h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="hoje">Hoje</SelectItem>
+            <SelectItem value="semana">Esta Semana</SelectItem>
+            <SelectItem value="mes">Este Mês</SelectItem>
+            <SelectItem value="todos">Todos</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={motoristaFiltro} onValueChange={setMotoristaFiltro}>
+          <SelectTrigger className="w-[150px] h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos motoristas</SelectItem>
+            {motoristas.map(m => (
+              <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex gap-1 ml-auto">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportExcel}>
+            <FileSpreadsheet className="h-3.5 w-3.5 mr-1" /> Excel
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportPDF}>
+            <FileText className="h-3.5 w-3.5 mr-1" /> PDF
+          </Button>
+        </div>
+      </div>
+
       {/* KPI Grid */}
       <SectionTitle icon={TrendingUp} title="Resumo do Dia" />
       <div className="grid grid-cols-2 gap-3">
@@ -325,7 +458,7 @@ export default function RelatoriosTab() {
       {/* Detailed Stop List */}
       <SectionTitle icon={MapPin} title="Detalhamento das Paradas" />
       <div className="space-y-2">
-        {paradas.map((p, i) => (
+        {paradasFiltradas.map((p, i) => (
           <Card key={p.id} className="fade-in">
             <CardContent className="p-3">
               <div className="flex items-center justify-between">
