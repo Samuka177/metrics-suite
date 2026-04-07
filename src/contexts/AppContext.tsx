@@ -21,47 +21,9 @@ const LS_MOTORISTAS = 'rotafacil_motoristas';
 
 const genId = () => crypto.randomUUID();
 
-const defaultParadas: Parada[] = [
-  {
-    id: genId(),
-    nome: 'Bar do Zé',
-    endereco: 'Rua das Flores, 123 - Centro',
-    tipo: 'Ponto fixo',
-    horario: '08:30',
-    produtos: [
-      { id: genId(), nome: 'Pilsen 600ml', quantidade: '2', unidade: 'cx', entregue: false },
-      { id: genId(), nome: 'IPA 350ml', quantidade: '1', unidade: 'cx', entregue: false },
-    ],
-    status: 'pendente',
-  },
-  {
-    id: genId(),
-    nome: 'Restaurante Sabor & Arte',
-    endereco: 'Av. Brasil, 456 - Jardim América',
-    tipo: 'Ponto fixo',
-    horario: '12:00',
-    produtos: [
-      { id: genId(), nome: 'Weiss 500ml', quantidade: '3', unidade: 'cx', entregue: false },
-    ],
-    status: 'pendente',
-  },
-  {
-    id: genId(),
-    nome: 'Maria Oliveira',
-    endereco: 'Rua Ipê, 789 - Vila Nova',
-    tipo: 'Delivery',
-    produtos: [
-      { id: genId(), nome: 'Pilsen 350ml', quantidade: '12', unidade: 'un', entregue: false },
-      { id: genId(), nome: 'Copo personalizado', quantidade: '2', unidade: 'un', entregue: false },
-    ],
-    status: 'pendente',
-  },
-];
+const defaultParadas: Parada[] = [];
 
-const defaultMotoristas: Motorista[] = [
-  { id: genId(), nome: 'João Silva', placa: 'ABC-1234', ativo: false },
-  { id: genId(), nome: 'Carlos Pereira', placa: 'XYZ-5678', ativo: false },
-];
+const defaultMotoristas: Motorista[] = [];
 
 function loadFromLS<T>(key: string, fallback: T): T {
   try {
@@ -118,8 +80,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const resetarRota = () => {
-    setParadas(defaultParadas.map(p => ({ ...p, id: genId(), produtos: p.produtos.map(pr => ({ ...pr, id: genId() })) })));
-    setMotoristas(defaultMotoristas.map(m => ({ ...m, id: genId() })));
+    setParadas([]);
+    setMotoristas([]);
+    localStorage.removeItem(LS_PARADAS);
+    localStorage.removeItem(LS_MOTORISTAS);
   };
 
   return (
