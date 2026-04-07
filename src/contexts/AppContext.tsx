@@ -80,8 +80,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const resetarRota = () => {
-    setParadas(defaultParadas.map(p => ({ ...p, id: genId(), produtos: p.produtos.map(pr => ({ ...pr, id: genId() })) })));
-    setMotoristas(defaultMotoristas.map(m => ({ ...m, id: genId() })));
+    setParadas([]);
+    setMotoristas([]);
+    localStorage.removeItem(LS_PARADAS);
+    localStorage.removeItem(LS_MOTORISTAS);
   };
 
   return (
