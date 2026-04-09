@@ -1,16 +1,26 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { Parada, Motorista, Produto } from '@/types/rotafacil';
+import { nearestNeighborOrder, totalDistance } from '@/utils/routeOptimization';
+
+interface OptimizationResult {
+  distanceBefore: number;
+  distanceAfter: number;
+  savings: number;
+}
 
 interface AppContextType {
   paradas: Parada[];
   motoristas: Motorista[];
+  lastOptimization: OptimizationResult | null;
   addParada: (p: Omit<Parada, 'id' | 'status' | 'produtos'> & { produtos: Omit<Produto, 'id' | 'entregue'>[] }) => void;
   updateParada: (id: string, data: Partial<Parada>) => void;
   removeParada: (id: string) => void;
+  reorderParadas: (fromIndex: number, toIndex: number) => void;
   addMotorista: (m: Omit<Motorista, 'id' | 'ativo'>) => void;
   updateMotorista: (id: string, data: Partial<Motorista>) => void;
   removeMotorista: (id: string) => void;
   roteirizar: () => void;
+  otimizarRota: () => void;
   resetarRota: () => void;
 }
 
@@ -22,7 +32,6 @@ const LS_MOTORISTAS = 'rotafacil_motoristas';
 const genId = () => crypto.randomUUID();
 
 const defaultParadas: Parada[] = [];
-
 const defaultMotoristas: Motorista[] = [];
 
 function loadFromLS<T>(key: string, fallback: T): T {
@@ -37,6 +46,7 @@ function loadFromLS<T>(key: string, fallback: T): T {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [paradas, setParadas] = useState<Parada[]>(() => loadFromLS(LS_PARADAS, defaultParadas));
   const [motoristas, setMotoristas] = useState<Motorista[]>(() => loadFromLS(LS_MOTORISTAS, defaultMotoristas));
+  const [lastOptimization, setLastOptimization] = useState<OptimizationResult | null>(null);
 
   useEffect(() => { localStorage.setItem(LS_PARADAS, JSON.stringify(paradas)); }, [paradas]);
   useEffect(() => { localStorage.setItem(LS_MOTORISTAS, JSON.stringify(motoristas)); }, [motoristas]);
@@ -59,6 +69,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setParadas(prev => prev.filter(p => p.id !== id));
   };
 
+  const reorderParadas = (fromIndex: number, toIndex: number) => {
+    setParadas(prev => {
+      const arr = [...prev];
+      const [moved] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, moved);
+      return arr;
+    });
+  };
+
   const addMotorista: AppContextType['addMotorista'] = (m) => {
     setMotoristas(prev => [...prev, { ...m, id: genId(), ativo: false }]);
   };
@@ -79,15 +98,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const otimizarRota = () => {
+    setParadas(prev => {
+      const withCoords = prev.filter(p => p.lat != null && p.lng != null);
+      const withoutCoords = prev.filter(p => p.lat == null || p.lng == null);
+
+      if (withCoords.length < 2) return prev;
+
+      const coords = withCoords.map(p => ({ lat: p.lat!, lng: p.lng! }));
+      const distBefore = totalDistance(coords);
+      const order = nearestNeighborOrder(coords);
+      const optimized = order.map(i => withCoords[i]);
+      const distAfter = totalDistance(order.map(i => coords[i]));
+
+      setLastOptimization({
+        distanceBefore: distBefore,
+        distanceAfter: distAfter,
+        savings: distBefore - distAfter,
+      });
+
+      return [...optimized, ...withoutCoords];
+    });
+  };
+
   const resetarRota = () => {
     setParadas([]);
     setMotoristas([]);
+    setLastOptimization(null);
     localStorage.removeItem(LS_PARADAS);
     localStorage.removeItem(LS_MOTORISTAS);
   };
 
   return (
-    <AppContext.Provider value={{ paradas, motoristas, addParada, updateParada, removeParada, addMotorista, updateMotorista, removeMotorista, roteirizar, resetarRota }}>
+    <AppContext.Provider value={{ paradas, motoristas, lastOptimization, addParada, updateParada, removeParada, reorderParadas, addMotorista, updateMotorista, removeMotorista, roteirizar, otimizarRota, resetarRota }}>
       {children}
     </AppContext.Provider>
   );
