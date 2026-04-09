@@ -8,10 +8,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Plus, MapPin, Clock, Package, ArrowDownUp, CheckCircle2, Truck, Eye, Trash2, Map } from 'lucide-react';
+import { Plus, MapPin, Clock, Package, CheckCircle2, Truck, Eye, Trash2, Map, Zap, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
-
+import { MOCK_PARADAS_SP } from '@/utils/routeOptimization';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
