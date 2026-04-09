@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect, useCallback } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Parada } from '@/types/rotafacil';
@@ -22,7 +22,6 @@ function createNumberedIcon(num: number, status: string) {
   });
 }
 
-// Default center: São Paulo
 const DEFAULT_CENTER: [number, number] = [-23.55, -46.63];
 
 function FitBounds({ positions }: { positions: [number, number][] }) {
@@ -37,23 +36,33 @@ function FitBounds({ positions }: { positions: [number, number][] }) {
 
 interface RouteMapProps {
   paradas: Parada[];
+  onReorder?: (fromIndex: number, toIndex: number) => void;
 }
 
-export default function RouteMap({ paradas }: RouteMapProps) {
-  // Generate pseudo-coordinates around São Paulo based on stop index
-  const positions: { parada: Parada; pos: [number, number]; index: number }[] = paradas.map((p, i) => {
-    // Simple deterministic spread based on name hash
+export default function RouteMap({ paradas, onReorder }: RouteMapProps) {
+  const getPos = useCallback((p: Parada, i: number): [number, number] => {
+    if (p.lat != null && p.lng != null) return [p.lat, p.lng];
+    // Fallback: deterministic spread
     let hash = 0;
     for (let c = 0; c < p.nome.length; c++) hash = ((hash << 5) - hash + p.nome.charCodeAt(c)) | 0;
     const lat = DEFAULT_CENTER[0] + (((hash % 100) / 100) * 0.08 - 0.04) + (i * 0.005);
     const lng = DEFAULT_CENTER[1] + ((((hash >> 8) % 100) / 100) * 0.08 - 0.04) + (i * 0.003);
-    return { parada: p, pos: [lat, lng], index: i + 1 };
-  });
+    return [lat, lng];
+  }, []);
+
+  const positions = paradas.map((p, i) => ({
+    parada: p,
+    pos: getPos(p, i),
+    index: i,
+  }));
 
   const allPos = positions.map(p => p.pos);
+  const polylinePositions: [number, number][] = positions
+    .filter(p => p.parada.status !== 'entregue')
+    .map(p => p.pos);
 
   return (
-    <div className="rounded-xl overflow-hidden border border-border" style={{ height: 250 }}>
+    <div className="rounded-xl overflow-hidden border border-border" style={{ height: 300 }}>
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={12}
@@ -63,13 +72,53 @@ export default function RouteMap({ paradas }: RouteMapProps) {
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {allPos.length > 0 && <FitBounds positions={allPos} />}
+
+        {/* Route polyline */}
+        {polylinePositions.length > 1 && (
+          <Polyline
+            positions={polylinePositions}
+            pathOptions={{ color: '#00D4AA', weight: 4, opacity: 0.8, dashArray: '8, 6' }}
+          />
+        )}
+
         {positions.map(({ parada, pos, index }) => (
-          <Marker key={parada.id} position={pos} icon={createNumberedIcon(index, parada.status)}>
+          <Marker
+            key={parada.id}
+            position={pos}
+            icon={createNumberedIcon(index + 1, parada.status)}
+            draggable={!!onReorder && parada.status === 'pendente'}
+            eventHandlers={
+              onReorder
+                ? {
+                    dragend: (e) => {
+                      const marker = e.target as L.Marker;
+                      const newLatLng = marker.getLatLng();
+                      // Find nearest position to snap to
+                      let closestIdx = index;
+                      let closestDist = Infinity;
+                      positions.forEach((other, otherIdx) => {
+                        if (otherIdx === index) return;
+                        const d = Math.hypot(other.pos[0] - newLatLng.lat, other.pos[1] - newLatLng.lng);
+                        if (d < closestDist) {
+                          closestDist = d;
+                          closestIdx = otherIdx;
+                        }
+                      });
+                      if (closestIdx !== index) {
+                        onReorder(index, closestIdx);
+                      }
+                      // Reset marker position
+                      marker.setLatLng(pos);
+                    },
+                  }
+                : undefined
+            }
+          >
             <Popup>
               <div className="text-xs">
-                <strong>#{index} {parada.nome}</strong><br />
+                <strong>#{index + 1} {parada.nome}</strong><br />
                 {parada.endereco}<br />
-                <span style={{ color: parada.status === 'entregue' ? '#3B6D11' : '#BA7517' }}>
+                <span style={{ color: parada.status === 'entregue' ? '#3B6D11' : parada.status === 'em_entrega' ? '#BA7517' : '#6b7280' }}>
                   {parada.status === 'entregue' ? '✓ Entregue' : parada.status === 'em_entrega' ? '⏳ Em entrega' : '○ Pendente'}
                 </span>
               </div>
