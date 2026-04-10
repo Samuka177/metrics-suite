@@ -20,6 +20,8 @@ export type Parada = {
   status: StatusParada;
   checkinTime?: string;
   checkoutTime?: string;
+  lat?: number;
+  lng?: number;
 };
 
 export type Motorista = {

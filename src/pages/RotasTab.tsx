@@ -8,10 +8,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Plus, MapPin, Clock, Package, ArrowDownUp, CheckCircle2, Truck, Eye, Trash2, Map } from 'lucide-react';
+import { Plus, MapPin, Clock, Package, CheckCircle2, Truck, Eye, Trash2, Map, Zap, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
-
+import { MOCK_PARADAS_SP } from '@/utils/routeOptimization';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
@@ -219,11 +219,25 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 export default function RotasTab() {
-  const { paradas, roteirizar } = useApp();
+  const { paradas, roteirizar, otimizarRota, reorderParadas, addParada, lastOptimization } = useApp();
   const [showMap, setShowMap] = useState(true);
   const total = paradas.length;
   const entregues = paradas.filter(p => p.status === 'entregue').length;
   const pendentes = paradas.filter(p => p.status === 'pendente').length;
+
+  const carregarDemo = () => {
+    MOCK_PARADAS_SP.forEach(m => {
+      addParada({
+        nome: m.nome,
+        endereco: m.endereco,
+        tipo: 'Ponto fixo',
+        lat: m.lat,
+        lng: m.lng,
+        produtos: [],
+      });
+    });
+    toast.success('5 paradas demo carregadas em São Paulo!');
+  };
 
   return (
     <div className="space-y-4 fade-in pb-4">
@@ -233,21 +247,43 @@ export default function RotasTab() {
         <MetricCard label="Pendentes" value={pendentes} color="text-muted-foreground" />
       </div>
 
+      {/* Optimization result banner */}
+      {lastOptimization && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-3 text-sm flex items-center justify-between">
+            <div>
+              <span className="font-semibold text-primary">Rota otimizada!</span>
+              <span className="text-muted-foreground ml-2">
+                {lastOptimization.distanceBefore.toFixed(1)} km → {lastOptimization.distanceAfter.toFixed(1)} km
+              </span>
+            </div>
+            <Badge className="bg-success text-success-foreground">
+              -{lastOptimization.savings.toFixed(1)} km
+            </Badge>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Map */}
       {showMap && paradas.length > 0 && (
-        <Suspense fallback={<div className="h-[250px] rounded-xl bg-muted animate-pulse" />}>
-          <RouteMap paradas={paradas} />
+        <Suspense fallback={<div className="h-[300px] rounded-xl bg-muted animate-pulse" />}>
+          <RouteMap paradas={paradas} onReorder={reorderParadas} />
         </Suspense>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <AddParadaSheet />
-        <Button variant="outline" size="sm" onClick={() => { roteirizar(); toast.success('Rota otimizada com sucesso!'); }}>
-          <ArrowDownUp className="h-4 w-4 mr-1" /> Roteirizar
+        <Button variant="outline" size="sm" onClick={() => { otimizarRota(); toast.success('Rota otimizada!'); }}>
+          <Zap className="h-4 w-4 mr-1" /> Otimizar Rota
         </Button>
         <Button variant="outline" size="sm" onClick={() => setShowMap(v => !v)}>
           <Map className="h-4 w-4 mr-1" /> {showMap ? 'Ocultar mapa' : 'Ver mapa'}
         </Button>
+        {paradas.length === 0 && (
+          <Button variant="outline" size="sm" onClick={carregarDemo}>
+            <Database className="h-4 w-4 mr-1" /> Carregar Demo SP
+          </Button>
+        )}
       </div>
 
       {paradas.length === 0 ? (
