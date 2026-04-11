@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { Parada, Motorista, Produto, ConfigRota } from '@/types/rotafacil';
 import { nearestNeighborOrder, totalDistance, haversine } from '@/utils/routeOptimization';
+import { geocodeAddress } from '@/utils/geocode';
 
 interface OptimizationResult {
   distanceBefore: number;
@@ -146,6 +147,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     setParadas(prev => calcETAs([...prev, newParada], config.velocidadeMedia));
     addAction(`Parada "${p.nome}" adicionada`);
+
+    // Auto-geocode if no coords
+    if (newParada.lat == null && newParada.endereco) {
+      geocodeAddress(newParada.endereco).then(coords => {
+        if (coords) {
+          setParadas(prev => calcETAs(
+            prev.map(x => x.id === newParada.id ? { ...x, ...coords } : x),
+            config.velocidadeMedia
+          ));
+        }
+      });
+    }
   };
 
   const updateParada = (id: string, data: Partial<Parada>) => {
@@ -179,6 +192,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
     setParadas(prev => calcETAs([...prev, ...newParadas], config.velocidadeMedia));
     addAction(`${list.length} paradas importadas`);
+
+    // Auto-geocode paradas without coords
+    const toGeocode = newParadas.filter(p => p.lat == null && p.endereco);
+    if (toGeocode.length > 0) {
+      (async () => {
+        for (const p of toGeocode) {
+          const coords = await geocodeAddress(p.endereco);
+          if (coords) {
+            setParadas(prev => calcETAs(
+              prev.map(x => x.id === p.id ? { ...x, ...coords } : x),
+              config.velocidadeMedia
+            ));
+          }
+          await new Promise(r => setTimeout(r, 1100));
+        }
+      })();
+    }
   };
 
   const addMotorista: AppContextType['addMotorista'] = (m) => {

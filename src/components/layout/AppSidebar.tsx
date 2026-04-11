@@ -8,7 +8,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +22,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import logoRotiflow from '@/assets/logo-rotiflow.webp';
 
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
@@ -35,7 +36,6 @@ const menuItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
-  const location = useLocation();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -51,11 +51,9 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-sidebar-foreground/70">
             {!collapsed && (
               <div className="flex items-center gap-2 py-2">
-                <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-                  <Truck className="h-4 w-4 text-sidebar-primary-foreground" />
-                </div>
+                <img src={logoRotiflow} alt="RotiFlow" className="h-8 w-8 rounded-lg shrink-0 object-cover" />
                 <div>
-                  <p className="font-bold text-sidebar-foreground text-sm">RotaFácil</p>
+                  <p className="font-bold text-sidebar-foreground text-sm">RotiFlow</p>
                   <p className="text-[10px] text-sidebar-foreground/60">Gestão de Entregas</p>
                 </div>
               </div>
