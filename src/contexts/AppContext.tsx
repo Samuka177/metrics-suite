@@ -192,6 +192,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
     setParadas(prev => calcETAs([...prev, ...newParadas], config.velocidadeMedia));
     addAction(`${list.length} paradas importadas`);
+
+    // Auto-geocode paradas without coords
+    const toGeocode = newParadas.filter(p => p.lat == null && p.endereco);
+    if (toGeocode.length > 0) {
+      (async () => {
+        for (const p of toGeocode) {
+          const coords = await geocodeAddress(p.endereco);
+          if (coords) {
+            setParadas(prev => calcETAs(
+              prev.map(x => x.id === p.id ? { ...x, ...coords } : x),
+              config.velocidadeMedia
+            ));
+          }
+          await new Promise(r => setTimeout(r, 1100));
+        }
+      })();
+    }
   };
 
   const addMotorista: AppContextType['addMotorista'] = (m) => {
