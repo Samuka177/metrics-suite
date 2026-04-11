@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Lock, Mail, Beer } from 'lucide-react';
+import { Lock, Mail } from 'lucide-react';
+import logoRotiflow from '@/assets/logo-rotiflow.webp';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -32,10 +33,8 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-primary/5 to-background">
       <div className="card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center">
-            <Beer className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Rota Fácil</h1>
+          <img src={logoRotiflow} alt="RotiFlow" className="h-24 w-auto" />
+          <h1 className="text-2xl font-bold text-foreground">RotiFlow</h1>
           <p className="text-sm text-muted-foreground text-center">
             Sistema de Roteirização e Gestão de Entregas
           </p>
