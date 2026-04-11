@@ -12,7 +12,7 @@ import AppShell from "./pages/AppShell";
 
 const queryClient = new QueryClient();
 
-const App = React.forwardRef<HTMLDivElement>(function App(_, _ref) {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -37,6 +37,4 @@ const App = React.forwardRef<HTMLDivElement>(function App(_, _ref) {
       </TooltipProvider>
     </QueryClientProvider>
   );
-});
-
-export default App;
+}
