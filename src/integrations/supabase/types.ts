@@ -167,11 +167,14 @@ export type Database = {
           ativo: boolean
           capacidade_peso: number | null
           capacidade_volume: number | null
+          checkin_time: string | null
+          checkout_time: string | null
           company_id: string
           cor: string | null
           created_at: string
           id: string
           nome: string
+          placa: string | null
           telefone: string | null
           veiculo: string | null
         }
@@ -179,11 +182,14 @@ export type Database = {
           ativo?: boolean
           capacidade_peso?: number | null
           capacidade_volume?: number | null
+          checkin_time?: string | null
+          checkout_time?: string | null
           company_id: string
           cor?: string | null
           created_at?: string
           id?: string
           nome: string
+          placa?: string | null
           telefone?: string | null
           veiculo?: string | null
         }
@@ -191,11 +197,14 @@ export type Database = {
           ativo?: boolean
           capacidade_peso?: number | null
           capacidade_volume?: number | null
+          checkin_time?: string | null
+          checkout_time?: string | null
           company_id?: string
           cor?: string | null
           created_at?: string
           id?: string
           nome?: string
+          placa?: string | null
           telefone?: string | null
           veiculo?: string | null
         }
@@ -219,16 +228,21 @@ export type Database = {
           eta_minutos: number | null
           fiscal_note_id: string | null
           horario: string | null
+          horario_max: string | null
+          horario_min: string | null
           id: string
           lat: number | null
           lng: number | null
           motorista_id: string | null
           municipio: string | null
           nome: string
+          observacoes: string | null
           ordem: number | null
           peso: number | null
           produtos: Json | null
           status: string
+          telefone: string | null
+          tipo: string | null
           uf: string | null
           volume: number | null
         }
@@ -241,16 +255,21 @@ export type Database = {
           eta_minutos?: number | null
           fiscal_note_id?: string | null
           horario?: string | null
+          horario_max?: string | null
+          horario_min?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
           motorista_id?: string | null
           municipio?: string | null
           nome: string
+          observacoes?: string | null
           ordem?: number | null
           peso?: number | null
           produtos?: Json | null
           status?: string
+          telefone?: string | null
+          tipo?: string | null
           uf?: string | null
           volume?: number | null
         }
@@ -263,16 +282,21 @@ export type Database = {
           eta_minutos?: number | null
           fiscal_note_id?: string | null
           horario?: string | null
+          horario_max?: string | null
+          horario_min?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
           motorista_id?: string | null
           municipio?: string | null
           nome?: string
+          observacoes?: string | null
           ordem?: number | null
           peso?: number | null
           produtos?: Json | null
           status?: string
+          telefone?: string | null
+          tipo?: string | null
           uf?: string | null
           volume?: number | null
         }
