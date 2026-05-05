@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { MapPin, Users, FileText, BarChart3, Menu, RotateCcw, Beer } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { MapPin, Users, FileText, BarChart3, Menu, RotateCcw, LogOut, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import RotasTab from './RotasTab';
@@ -25,9 +27,10 @@ export default function AppShell() {
   const [tab, setTab] = useState<Tab>('rotas');
   const [resetOpen, setResetOpen] = useState(false);
   const { resetarRota } = useApp();
+  const { company, profile, isAdmin, signOut } = useAuth();
 
-  const handleReset = () => {
-    resetarRota();
+  const handleReset = async () => {
+    await resetarRota();
     toast.success('Rota do dia resetada!');
     setResetOpen(false);
   };
@@ -35,20 +38,30 @@ export default function AppShell() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Beer className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-lg font-bold text-foreground leading-tight">Rota Fácil</h1>
-            <p className="text-[10px] text-muted-foreground">{format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
-          </div>
+        <div>
+          <h1 className="text-lg font-bold text-foreground leading-tight">RotiFlow</h1>
+          <p className="text-[10px] text-muted-foreground">
+            {company?.name || '—'} · {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+          </p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm"><Menu className="h-5 w-5" /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">{profile?.email}</div>
+            <DropdownMenuSeparator />
+            {isAdmin && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/convites"><UserPlus className="h-4 w-4 mr-2" /> Convidar usuário</Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => setResetOpen(true)}>
               <RotateCcw className="h-4 w-4 mr-2" /> Resetar rota do dia
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={signOut}>
+              <LogOut className="h-4 w-4 mr-2" /> Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
