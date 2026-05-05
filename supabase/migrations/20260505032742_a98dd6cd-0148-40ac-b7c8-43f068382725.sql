@@ -1,0 +1,12 @@
+
+ALTER TABLE public.paradas
+  ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'Delivery',
+  ADD COLUMN IF NOT EXISTS observacoes TEXT,
+  ADD COLUMN IF NOT EXISTS telefone TEXT,
+  ADD COLUMN IF NOT EXISTS horario_min TEXT,
+  ADD COLUMN IF NOT EXISTS horario_max TEXT;
+
+ALTER TABLE public.motoristas
+  ADD COLUMN IF NOT EXISTS placa TEXT,
+  ADD COLUMN IF NOT EXISTS checkin_time TEXT,
+  ADD COLUMN IF NOT EXISTS checkout_time TEXT;

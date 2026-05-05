@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Lock, Mail } from 'lucide-react';
-import logoRotiflow from '@/assets/logo-rotiflow.webp';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,29 +12,24 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
-    setTimeout(() => {
-      if (email === 'admin@turatti.com.br' && password === 'Adm@1100') {
-        sessionStorage.setItem('rotafacil_auth', 'true');
-        sessionStorage.setItem('rotafacil_role', 'gestor');
-        toast.success('Login realizado com sucesso!');
-        navigate('/');
-      } else {
-        toast.error('E-mail ou senha incorretos.');
-      }
-      setLoading(false);
-    }, 600);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message);
+      return;
+    }
+    toast.success('Login realizado!');
+    navigate('/');
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-primary/5 to-background">
       <div className="card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in">
-        <div className="flex flex-col items-center gap-3">
-          <img src={logoRotiflow} alt="RotiFlow" className="h-24 w-auto" />
-          <h1 className="text-2xl font-bold text-foreground">RotiFlow</h1>
+        <div className="flex flex-col items-center gap-2">
+          <h1 className="text-3xl font-bold text-foreground">RotiFlow</h1>
           <p className="text-sm text-muted-foreground text-center">
             Sistema de Roteirização e Gestão de Entregas
           </p>
@@ -45,14 +40,8 @@ export default function Login() {
             <label className="text-sm font-medium text-foreground">E-mail</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="email"
-                placeholder="admin@turatti.com.br"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-10"
-                required
-              />
+              <Input type="email" placeholder="seu@empresa.com.br" value={email}
+                onChange={e => setEmail(e.target.value)} className="pl-10" required />
             </div>
           </div>
 
@@ -60,14 +49,8 @@ export default function Login() {
             <label className="text-sm font-medium text-foreground">Senha</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10"
-                required
-              />
+              <Input type="password" placeholder="••••••••" value={password}
+                onChange={e => setPassword(e.target.value)} className="pl-10" required />
             </div>
           </div>
 
@@ -75,6 +58,17 @@ export default function Login() {
             {loading ? 'Entrando...' : 'Entrar'}
           </Button>
         </form>
+
+        <div className="text-center text-sm text-muted-foreground space-y-1">
+          <p>
+            <Link to="/signup" className="text-primary hover:underline">
+              Cadastrar nova empresa
+            </Link>
+          </p>
+          <p className="text-xs">
+            Foi convidado? Use o link recebido por e-mail.
+          </p>
+        </div>
       </div>
     </div>
   );
