@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          company_id: string | null
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          company_id?: string | null
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          company_id?: string | null
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           cnpj: string | null
@@ -40,6 +76,8 @@ export type Database = {
       }
       fiscal_notes: {
         Row: {
+          arquivo_nome: string | null
+          arquivo_tipo: string | null
           chave: string | null
           company_id: string
           created_at: string
@@ -52,6 +90,7 @@ export type Database = {
           destinatario_uf: string | null
           emitente_cnpj: string | null
           emitente_nome: string | null
+          error_message: string | null
           id: string
           itens: Json | null
           numero: string | null
@@ -59,10 +98,13 @@ export type Database = {
           raw_extracted: Json | null
           serie: string | null
           source_format: string
+          status: string
           valor_total: number | null
           volume_m3: number | null
         }
         Insert: {
+          arquivo_nome?: string | null
+          arquivo_tipo?: string | null
           chave?: string | null
           company_id: string
           created_at?: string
@@ -75,6 +117,7 @@ export type Database = {
           destinatario_uf?: string | null
           emitente_cnpj?: string | null
           emitente_nome?: string | null
+          error_message?: string | null
           id?: string
           itens?: Json | null
           numero?: string | null
@@ -82,10 +125,13 @@ export type Database = {
           raw_extracted?: Json | null
           serie?: string | null
           source_format: string
+          status?: string
           valor_total?: number | null
           volume_m3?: number | null
         }
         Update: {
+          arquivo_nome?: string | null
+          arquivo_tipo?: string | null
           chave?: string | null
           company_id?: string
           created_at?: string
@@ -98,6 +144,7 @@ export type Database = {
           destinatario_uf?: string | null
           emitente_cnpj?: string | null
           emitente_nome?: string | null
+          error_message?: string | null
           id?: string
           itens?: Json | null
           numero?: string | null
@@ -105,6 +152,7 @@ export type Database = {
           raw_extracted?: Json | null
           serie?: string | null
           source_format?: string
+          status?: string
           valor_total?: number | null
           volume_m3?: number | null
         }
@@ -405,6 +453,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "member" | "super_admin"
