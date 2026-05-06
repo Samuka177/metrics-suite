@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import type { Parada, Motorista, Produto, ConfigRota } from '@/types/rotafacil';
 import { nearestNeighborOrder, totalDistance, haversine } from '@/utils/routeOptimization';
 import { geocodeAddress } from '@/utils/geocode';
+import { logAction } from '@/utils/audit';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
