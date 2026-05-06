@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import type { Parada, Motorista, Produto, ConfigRota } from '@/types/rotafacil';
 import { nearestNeighborOrder, totalDistance, haversine } from '@/utils/routeOptimization';
 import { geocodeAddress } from '@/utils/geocode';
+import { logAction } from '@/utils/audit';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -34,6 +35,7 @@ interface AppContextType {
   roteirizar: () => void;
   otimizarRota: () => void;
   resetarRota: () => Promise<void>;
+  carregarDemo: () => Promise<void>;
   setConfig: (c: Partial<ConfigRota>) => void;
 
   iniciarRota: () => void;
@@ -296,10 +298,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await Promise.all([
       supabase.from('paradas').delete().eq('company_id', companyId),
       supabase.from('motoristas').delete().eq('company_id', companyId),
+      supabase.from('fiscal_notes').delete().eq('company_id', companyId),
     ]);
     setParadas([]); setMotoristas([]); setLastOptimization(null);
     setExecutionMode(false); setHistoryActions([]);
+    await logAction(companyId, 'resetar_dados');
   };
+
+  const carregarDemo = async () => {
+    if (!companyId) return;
+    await resetarRota();
+    const demoMotoristas = [
+      { nome: 'João Silva', placa: 'ABC-1234', capacidade_peso: 800, capacidade_volume: 5 },
+      { nome: 'Maria Santos', placa: 'DEF-5678', capacidade_peso: 1200, capacidade_volume: 8 },
+      { nome: 'Pedro Lima', placa: 'GHI-9012', capacidade_peso: 600, capacidade_volume: 4 },
+    ];
+    const { data: mData } = await supabase.from('motoristas').insert(
+      demoMotoristas.map((m, i) => ({
+        company_id: companyId, ...m, cor: DRIVER_COLORS[i], ativo: true,
+      })),
+    ).select();
+    setMotoristas((mData || []).map(rowToMotorista));
+
+    const demoParadas = [
+      { nome: 'Padaria Central', endereco: 'Av. Paulista, 1000, São Paulo, SP', lat: -23.5614, lng: -46.6559, peso: 50, volume: 0.3 },
+      { nome: 'Mercado Vila', endereco: 'R. Augusta, 500, São Paulo, SP', lat: -23.5530, lng: -46.6555, peso: 120, volume: 0.8 },
+      { nome: 'Restaurante Sul', endereco: 'Av. Brigadeiro Faria Lima, 2000, São Paulo, SP', lat: -23.5765, lng: -46.6890, peso: 80, volume: 0.5 },
+      { nome: 'Bar do Zé', endereco: 'R. dos Pinheiros, 300, São Paulo, SP', lat: -23.5651, lng: -46.6900, peso: 200, volume: 1.2 },
+      { nome: 'Lanchonete Express', endereco: 'Av. Rebouças, 1500, São Paulo, SP', lat: -23.5670, lng: -46.6770, peso: 60, volume: 0.4 },
+      { nome: 'Empório Gourmet', endereco: 'R. Oscar Freire, 800, São Paulo, SP', lat: -23.5621, lng: -46.6700, peso: 90, volume: 0.6 },
+    ];
+    const { data: pData } = await supabase.from('paradas').insert(
+      demoParadas.map(p => ({ company_id: companyId, ...p, tipo: 'Delivery', status: 'pendente', produtos: [] })),
+    ).select();
+    setParadas(calcETAs((pData || []).map(rowToParada), config.velocidadeMedia));
+    await logAction(companyId, 'carregar_demo', undefined, { paradas: demoParadas.length, motoristas: demoMotoristas.length });
+  };
+
 
   const setConfig = (c: Partial<ConfigRota>) => {
     setConfigState(prev => {
@@ -396,7 +431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       paradas, motoristas, config, lastOptimization, executionMode, currentStopIndex, capacityWarnings, historyActions,
       addParada, updateParada, removeParada, reorderParadas, importParadas,
       addMotorista, updateMotorista, removeMotorista,
-      roteirizar, otimizarRota, resetarRota, setConfig,
+      roteirizar, otimizarRota, resetarRota, carregarDemo, setConfig,
       iniciarRota, pararRota, marcarEntregue, marcarFalha, reagendarParada,
       distribuirAutomaticamente, atribuirParada,
       undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,

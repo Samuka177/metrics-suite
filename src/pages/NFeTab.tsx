@@ -3,9 +3,11 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { FileText, Upload, Plus, X, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { logAction } from '@/utils/audit';
 
 interface ParsedNote {
   numero?: string; serie?: string; chave?: string;
@@ -20,10 +22,7 @@ interface ParsedNote {
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result.split(',')[1]);
-    };
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -35,61 +34,85 @@ export default function NFeTab() {
   const [nfe, setNfe] = useState<ParsedNote | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState('');
   const [sourceFormat, setSourceFormat] = useState<string>('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processFile = async (file: File) => {
+    if (!profile?.company_id) return;
     setError(''); setNfe(null); setLoading(true);
+    setProgress(10); setProgressLabel('Lendo arquivo...');
     try {
       const base64 = await fileToBase64(file);
+      setProgress(40); setProgressLabel('Enviando para a IA...');
       const { data, error: fnErr } = await supabase.functions.invoke('parse-fiscal-note', {
         body: { filename: file.name, mimeType: file.type, base64 },
       });
       if (fnErr) throw new Error(fnErr.message);
       if (data?.error) throw new Error(data.error);
+      setProgress(80); setProgressLabel('Salvando nota...');
       setNfe(data.parsed);
       setSourceFormat(data.source_format);
 
-      // Salva no banco
-      if (profile?.company_id) {
-        await supabase.from('fiscal_notes').insert({
-          company_id: profile.company_id,
-          source_format: data.source_format,
-          ...data.parsed,
-          raw_extracted: data.parsed,
-        });
-      }
+      const { data: saved } = await supabase.from('fiscal_notes').insert({
+        company_id: profile.company_id,
+        source_format: data.source_format,
+        arquivo_nome: file.name,
+        arquivo_tipo: file.type,
+        status: 'parsed',
+        ...data.parsed,
+        raw_extracted: data.parsed,
+      }).select().single();
+      await logAction(profile.company_id, 'upload_nota', { type: 'fiscal_note', id: saved?.id }, {
+        arquivo: file.name, formato: data.source_format,
+      });
+      setProgress(100);
       toast.success('Nota lida com sucesso!');
     } catch (err: any) {
-      setError(err.message || 'Erro ao processar arquivo');
+      const msg = err.message || 'Erro ao processar arquivo';
+      setError(msg);
+      // registrar nota em status erro
+      if (profile?.company_id) {
+        const { data: saved } = await supabase.from('fiscal_notes').insert({
+          company_id: profile.company_id,
+          source_format: 'unknown',
+          arquivo_nome: file.name, arquivo_tipo: file.type,
+          status: 'erro', error_message: msg,
+        }).select().single();
+        await logAction(profile.company_id, 'erro_parse', { type: 'fiscal_note', id: saved?.id }, {
+          arquivo: file.name, erro: msg,
+        });
+      }
     } finally {
       setLoading(false);
+      setTimeout(() => { setProgress(0); setProgressLabel(''); }, 800);
       if (fileRef.current) fileRef.current.value = '';
     }
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await processFile(file);
   };
 
   const addToRoute = async () => {
     if (!nfe) return;
     const enderecoCompleto = [
-      nfe.destinatario_endereco,
-      nfe.destinatario_municipio,
-      nfe.destinatario_uf,
-      nfe.destinatario_cep,
+      nfe.destinatario_endereco, nfe.destinatario_municipio,
+      nfe.destinatario_uf, nfe.destinatario_cep,
     ].filter(Boolean).join(', ');
 
     await addParada({
       nome: nfe.destinatario_nome || `NF ${nfe.numero || ''}`,
       endereco: enderecoCompleto,
       tipo: 'Delivery',
-      peso: nfe.peso_kg,
-      volume: nfe.volume_m3,
+      peso: nfe.peso_kg, volume: nfe.volume_m3,
       produtos: (nfe.itens || []).map(p => ({
         nome: p.nome, quantidade: String(p.quantidade ?? ''), unidade: p.unidade || '',
       })),
     });
-    toast.success('Adicionada à rota com geocodificação automática!');
+    toast.success('Adicionada à rota!');
     setNfe(null);
   };
 
@@ -103,8 +126,8 @@ export default function NFeTab() {
         {loading ? (
           <>
             <Loader2 className="h-10 w-10 text-primary mb-3 animate-spin" />
-            <p className="font-medium">Processando com IA...</p>
-            <p className="text-xs text-muted-foreground mt-1">Extraindo dados da nota</p>
+            <p className="font-medium">{progressLabel || 'Processando com IA...'}</p>
+            <Progress value={progress} className="w-full mt-3 max-w-xs" />
           </>
         ) : (
           <>
@@ -119,9 +142,15 @@ export default function NFeTab() {
 
       {error && (
         <Card className="border-destructive">
-          <CardContent className="p-4 flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-5 w-5 shrink-0" />
-            <p className="text-sm">{error}</p>
+          <CardContent className="p-4 flex items-start gap-2 text-destructive">
+            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Falha no parsing</p>
+              <p className="text-xs">{error}</p>
+              <p className="text-xs mt-2 text-muted-foreground">
+                Veja em <strong>Notas Fiscais</strong> para reprocessar.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -139,9 +168,7 @@ export default function NFeTab() {
                   <Sparkles className="h-3 w-3" /> Extraído via {sourceFormat?.toUpperCase()}
                 </p>
               </div>
-              <button onClick={() => setNfe(null)}>
-                <X className="h-4 w-4 text-muted-foreground" />
-              </button>
+              <button onClick={() => setNfe(null)}><X className="h-4 w-4 text-muted-foreground" /></button>
             </div>
 
             <Card className="bg-primary/5 border-primary/20">
@@ -152,27 +179,6 @@ export default function NFeTab() {
                 </p>
               </CardContent>
             </Card>
-
-            {(nfe.peso_kg || nfe.volume_m3 || nfe.valor_total) && (
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                {nfe.valor_total != null && <div className="p-2 bg-muted rounded">R$ {nfe.valor_total.toFixed(2)}</div>}
-                {nfe.peso_kg != null && <div className="p-2 bg-muted rounded">{nfe.peso_kg} kg</div>}
-                {nfe.volume_m3 != null && <div className="p-2 bg-muted rounded">{nfe.volume_m3} m³</div>}
-              </div>
-            )}
-
-            {nfe.itens && nfe.itens.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Itens ({nfe.itens.length})</p>
-                <div className="max-h-40 overflow-y-auto space-y-1">
-                  {nfe.itens.map((p, i) => (
-                    <div key={i} className="text-xs p-2 rounded border">
-                      {p.nome} — {p.quantidade ?? ''} {p.unidade || ''}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="flex gap-2">
               <Button onClick={addToRoute} className="flex-1">
