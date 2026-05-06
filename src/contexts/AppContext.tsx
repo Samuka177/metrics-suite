@@ -431,7 +431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       paradas, motoristas, config, lastOptimization, executionMode, currentStopIndex, capacityWarnings, historyActions,
       addParada, updateParada, removeParada, reorderParadas, importParadas,
       addMotorista, updateMotorista, removeMotorista,
-      roteirizar, otimizarRota, resetarRota, setConfig,
+      roteirizar, otimizarRota, resetarRota, carregarDemo, setConfig,
       iniciarRota, pararRota, marcarEntregue, marcarFalha, reagendarParada,
       distribuirAutomaticamente, atribuirParada,
       undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,
