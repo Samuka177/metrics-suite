@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,12 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: roles } = await supabase
           .from('user_roles')
           .select('role')
-          .eq('user_id', uid)
-          .eq('company_id', prof.company_id);
-        setIsAdmin(!!roles?.some(r => r.role === 'admin'));
+          .eq('user_id', uid);
+        setIsAdmin(!!roles?.some(r => r.role === 'admin' || r.role === 'super_admin'));
+        setIsSuperAdmin(!!roles?.some(r => r.role === 'super_admin'));
       } else {
         setCompany(null);
         setIsAdmin(false);
+        setIsSuperAdmin(false);
       }
     };
 
@@ -59,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (sess?.user) {
         setTimeout(() => loadProfile(sess.user.id), 0);
       } else {
-        setProfile(null); setCompany(null); setIsAdmin(false);
+        setProfile(null); setCompany(null); setIsAdmin(false); setIsSuperAdmin(false);
       }
     });
 
@@ -74,11 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setProfile(null); setCompany(null); setIsAdmin(false);
+    setProfile(null); setCompany(null); setIsAdmin(false); setIsSuperAdmin(false);
   };
 
   return (
-    <Ctx.Provider value={{ session, user, profile, company, isAdmin, loading, signOut }}>
+    <Ctx.Provider value={{ session, user, profile, company, isAdmin, isSuperAdmin, loading, signOut }}>
       {children}
     </Ctx.Provider>
   );
