@@ -35,6 +35,7 @@ interface AppContextType {
   roteirizar: () => void;
   otimizarRota: () => void;
   resetarRota: () => Promise<void>;
+  carregarDemo: () => Promise<void>;
   setConfig: (c: Partial<ConfigRota>) => void;
 
   iniciarRota: () => void;
