@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Lock, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+
+const SUPER_EMAIL = 'admin@rotiflow.app';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,13 +14,21 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) navigate('/', { replace: true });
+    });
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Atalho do super admin: usuário "admin" é mapeado para admin@rotiflow.app
+    const loginEmail = email.trim().toLowerCase() === 'admin' ? SUPER_EMAIL : email.trim();
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
     setLoading(false);
     if (error) {
-      toast.error(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message);
+      toast.error(error.message === 'Invalid login credentials' ? 'Usuário ou senha incorretos.' : error.message);
       return;
     }
     toast.success('Login realizado!');
@@ -37,11 +47,11 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">E-mail</label>
+            <label className="text-sm font-medium text-foreground">Usuário ou e-mail</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input type="email" placeholder="seu@empresa.com.br" value={email}
-                onChange={e => setEmail(e.target.value)} className="pl-10" required />
+              <Input type="text" placeholder="admin ou seu@empresa.com.br" value={email}
+                onChange={e => setEmail(e.target.value)} className="pl-10" required autoComplete="username" />
             </div>
           </div>
 
@@ -50,7 +60,7 @@ export default function Login() {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input type="password" placeholder="••••••••" value={password}
-                onChange={e => setPassword(e.target.value)} className="pl-10" required />
+                onChange={e => setPassword(e.target.value)} className="pl-10" required autoComplete="current-password" />
             </div>
           </div>
 
@@ -59,16 +69,9 @@ export default function Login() {
           </Button>
         </form>
 
-        <div className="text-center text-sm text-muted-foreground space-y-1">
-          <p>
-            <Link to="/signup" className="text-primary hover:underline">
-              Cadastrar nova empresa
-            </Link>
-          </p>
-          <p className="text-xs">
-            Foi convidado? Use o link recebido por e-mail.
-          </p>
-        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          O acesso é criado pelo administrador da plataforma. Solicite suas credenciais.
+        </p>
       </div>
     </div>
   );
