@@ -11,6 +11,7 @@ interface AuthCtx {
   profile: Profile | null;
   company: Company | null;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 }
