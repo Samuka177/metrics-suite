@@ -78,6 +78,9 @@ export default function EmpresasAdmin() {
 
   return (
     <div className="space-y-4 fade-in pb-4">
+      <Button variant="ghost" size="sm" asChild className="-ml-2">
+        <Link to="/"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Link>
+      </Button>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Building2 className="h-5 w-5" /> Empresas</h1>
