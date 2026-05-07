@@ -24,21 +24,7 @@ const tabs: { key: Tab; label: string; icon: typeof MapPin }[] = [
 
 export default function AppShell() {
   const [tab, setTab] = useState<Tab>('rotas');
-  const [resetOpen, setResetOpen] = useState(false);
-  const [demoOpen, setDemoOpen] = useState(false);
-  const { resetarRota, carregarDemo } = useApp();
   const { company, profile, isAdmin, isSuperAdmin, signOut } = useAuth();
-
-  const handleReset = async () => {
-    await resetarRota();
-    toast.success('Todos os dados foram apagados.');
-    setResetOpen(false);
-  };
-  const handleDemo = async () => {
-    await carregarDemo();
-    toast.success('Base demo carregada!');
-    setDemoOpen(false);
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -57,11 +43,9 @@ export default function AppShell() {
             <div className="px-2 py-1.5 text-xs text-muted-foreground">{profile?.email}</div>
             <DropdownMenuSeparator />
             {isSuperAdmin && (
-              <>
-                <DropdownMenuItem asChild>
-                  <Link to="/admin/empresas"><Building2 className="h-4 w-4 mr-2" /> Empresas</Link>
-                </DropdownMenuItem>
-              </>
+              <DropdownMenuItem asChild>
+                <Link to="/admin/empresas"><Building2 className="h-4 w-4 mr-2" /> Empresas</Link>
+              </DropdownMenuItem>
             )}
             {isAdmin && (
               <>
@@ -73,13 +57,6 @@ export default function AppShell() {
                 </DropdownMenuItem>
               </>
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setDemoOpen(true)}>
-              <Sparkles className="h-4 w-4 mr-2" /> Carregar dados demo
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setResetOpen(true)} className="text-destructive">
-              <RotateCcw className="h-4 w-4 mr-2" /> Apagar tudo agora
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut}>
               <LogOut className="h-4 w-4 mr-2" /> Sair
@@ -110,32 +87,6 @@ export default function AppShell() {
           })}
         </div>
       </nav>
-
-      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Apagar todos os dados?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Todas as paradas, motoristas e notas fiscais da sua empresa serão removidos. Esta ação não pode ser desfeita.
-          </p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setResetOpen(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleReset}>Apagar tudo</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={demoOpen} onOpenChange={setDemoOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Carregar base demo?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Isto irá <strong>apagar todos os dados atuais</strong> e carregar 6 paradas + 3 motoristas de exemplo (São Paulo) para testar a roteirização.
-          </p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDemoOpen(false)}>Cancelar</Button>
-            <Button onClick={handleDemo}>Apagar e carregar demo</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
