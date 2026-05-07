@@ -42,6 +42,8 @@ export type Motorista = {
   capacidadePeso?: number;  // kg máximo
   capacidadeVolume?: number; // m³ máximo
   cor: string; // hex color for map
+  telefone?: string; // WhatsApp (E.164 ou com DDD)
+  email?: string;
 };
 
 export type ConfigRota = {

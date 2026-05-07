@@ -79,6 +79,7 @@ function rowToMotorista(r: any): Motorista {
     capacidadePeso: r.capacidade_peso ?? undefined, capacidadeVolume: r.capacidade_volume ?? undefined,
     cor: r.cor || DRIVER_COLORS[0],
     checkinTime: r.checkin_time ?? undefined, checkoutTime: r.checkout_time ?? undefined,
+    telefone: r.telefone ?? undefined, email: r.email ?? undefined,
   };
 }
 
@@ -240,7 +241,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const cor = DRIVER_COLORS[motoristas.length % DRIVER_COLORS.length];
     const { data } = await supabase.from('motoristas').insert({
       company_id: companyId, nome: m.nome, placa: m.placa,
-      capacidade_peso: m.capacidadePeso, capacidade_volume: m.capacidadeVolume, cor, ativo: false,
+      capacidade_peso: m.capacidadePeso, capacidade_volume: m.capacidadeVolume,
+      telefone: m.telefone, email: m.email,
+      cor, ativo: false,
     }).select().single();
     if (data) setMotoristas(prev => [...prev, rowToMotorista(data)]);
     addAction(`Motorista "${m.nome}" cadastrado`);
@@ -255,6 +258,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (data.capacidadeVolume !== undefined) dbData.capacidade_volume = data.capacidadeVolume;
     if (data.checkinTime !== undefined) dbData.checkin_time = data.checkinTime;
     if (data.checkoutTime !== undefined) dbData.checkout_time = data.checkoutTime;
+    if (data.telefone !== undefined) dbData.telefone = data.telefone;
+    if (data.email !== undefined) dbData.email = data.email;
     await supabase.from('motoristas').update(dbData).eq('id', id);
     setMotoristas(prev => prev.map(m => m.id === id ? { ...m, ...data } : m));
   };

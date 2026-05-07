@@ -14,6 +14,8 @@ export default function MotoristasTab() {
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState('');
   const [placa, setPlaca] = useState('');
+  const [telefone, setTelefone] = useState('');
+  const [email, setEmail] = useState('');
   const [capPeso, setCapPeso] = useState('');
   const [capVolume, setCapVolume] = useState('');
 
@@ -22,12 +24,12 @@ export default function MotoristasTab() {
   const handleSave = () => {
     if (!nome || !placa) { toast.error('Preencha nome e placa'); return; }
     addMotorista({
-      nome, placa,
+      nome, placa, telefone: telefone || undefined, email: email || undefined,
       capacidadePeso: capPeso ? Number(capPeso) : undefined,
       capacidadeVolume: capVolume ? Number(capVolume) : undefined,
     });
     toast.success(`Motorista "${nome}" cadastrado!`);
-    setNome(''); setPlaca(''); setCapPeso(''); setCapVolume(''); setOpen(false);
+    setNome(''); setPlaca(''); setTelefone(''); setEmail(''); setCapPeso(''); setCapVolume(''); setOpen(false);
   };
 
   const checkin = (id: string) => {
@@ -62,6 +64,16 @@ export default function MotoristasTab() {
             <div>
               <label className="text-sm font-medium">Placa do veículo</label>
               <Input value={placa} onChange={e => setPlaca(e.target.value)} placeholder="ABC-1234" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium">WhatsApp</label>
+                <Input value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 99999-0000" />
+              </div>
+              <div>
+                <label className="text-xs font-medium">E-mail</label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="motorista@email.com" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>

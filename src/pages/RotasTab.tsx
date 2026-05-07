@@ -13,12 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Plus, MapPin, Clock, Package, CheckCircle2, Truck, Eye, Trash2, Map, Zap, Database,
   Upload, Play, Pause, XCircle, RotateCcw, Undo2, Redo2, Weight, Box, AlertTriangle,
-  ArrowUp, Edit2, MessageSquare, Timer, History
+  ArrowUp, Edit2, MessageSquare, Timer, History, Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
 import { MOCK_PARADAS_SP } from '@/utils/routeOptimization';
 import ImportModal from '@/components/import/ImportModal';
+import { sendRouteViaWhatsApp } from '@/utils/whatsapp';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
@@ -472,6 +473,42 @@ export default function RotasTab() {
       </Dialog>
 
       <ImportModal open={showImport} onOpenChange={setShowImport} />
+
+      {/* Enviar rota via WhatsApp por motorista */}
+      {motoristas.some(m => paradas.some(p => p.motoristaId === m.id)) && (
+        <Card>
+          <CardContent className="p-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1">
+              <Send className="h-3.5 w-3.5" /> Enviar rota por WhatsApp
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {motoristas.map(m => {
+                const paradasMot = paradas.filter(p => p.motoristaId === m.id);
+                if (paradasMot.length === 0) return null;
+                return (
+                  <Button
+                    key={m.id}
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    onClick={() => {
+                      if (!m.telefone) {
+                        toast.error(`${m.nome} não possui WhatsApp cadastrado`);
+                        return;
+                      }
+                      const ok = sendRouteViaWhatsApp(m, paradasMot);
+                      if (ok) toast.success(`Rota enviada para ${m.nome}`);
+                    }}
+                  >
+                    <span className="h-2 w-2 rounded-full mr-1.5" style={{ backgroundColor: m.cor }} />
+                    {m.nome.split(' ')[0]} ({paradasMot.length})
+                  </Button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stop list */}
       {paradas.length === 0 ? (
