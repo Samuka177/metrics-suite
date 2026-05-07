@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Users, FileText, BarChart3, Menu, RotateCcw, LogOut, UserPlus, Sparkles, Building2, Shield, FileSearch } from 'lucide-react';
+import { MapPin, Users, FileText, BarChart3, Menu, LogOut, UserPlus, Building2, Shield, FileSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
 import RotasTab from './RotasTab';
 import MotoristasTab from './MotoristasTab';
 import NFeTab from './NFeTab';
