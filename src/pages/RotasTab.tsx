@@ -13,12 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Plus, MapPin, Clock, Package, CheckCircle2, Truck, Eye, Trash2, Map, Zap, Database,
   Upload, Play, Pause, XCircle, RotateCcw, Undo2, Redo2, Weight, Box, AlertTriangle,
-  ArrowUp, Edit2, MessageSquare, Timer, History
+  ArrowUp, Edit2, MessageSquare, Timer, History, Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
 import { MOCK_PARADAS_SP } from '@/utils/routeOptimization';
 import ImportModal from '@/components/import/ImportModal';
+import { sendRouteViaWhatsApp } from '@/utils/whatsapp';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
