@@ -220,6 +220,7 @@ export type Database = {
           company_id: string
           cor: string | null
           created_at: string
+          email: string | null
           id: string
           nome: string
           placa: string | null
@@ -235,6 +236,7 @@ export type Database = {
           company_id: string
           cor?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           nome: string
           placa?: string | null
@@ -250,6 +252,7 @@ export type Database = {
           company_id?: string
           cor?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           nome?: string
           placa?: string | null
