@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Building2, Plus, UserPlus, RefreshCw } from 'lucide-react';
+import { Building2, Plus, UserPlus, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 interface Company { id: string; name: string; email_domain: string; created_at: string }
@@ -77,6 +78,9 @@ export default function EmpresasAdmin() {
 
   return (
     <div className="space-y-4 fade-in pb-4">
+      <Button variant="ghost" size="sm" asChild className="-ml-2">
+        <Link to="/"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Link>
+      </Button>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Building2 className="h-5 w-5" /> Empresas</h1>
