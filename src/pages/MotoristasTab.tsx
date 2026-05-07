@@ -14,6 +14,8 @@ export default function MotoristasTab() {
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState('');
   const [placa, setPlaca] = useState('');
+  const [telefone, setTelefone] = useState('');
+  const [email, setEmail] = useState('');
   const [capPeso, setCapPeso] = useState('');
   const [capVolume, setCapVolume] = useState('');
 
@@ -22,12 +24,12 @@ export default function MotoristasTab() {
   const handleSave = () => {
     if (!nome || !placa) { toast.error('Preencha nome e placa'); return; }
     addMotorista({
-      nome, placa,
+      nome, placa, telefone: telefone || undefined, email: email || undefined,
       capacidadePeso: capPeso ? Number(capPeso) : undefined,
       capacidadeVolume: capVolume ? Number(capVolume) : undefined,
     });
     toast.success(`Motorista "${nome}" cadastrado!`);
-    setNome(''); setPlaca(''); setCapPeso(''); setCapVolume(''); setOpen(false);
+    setNome(''); setPlaca(''); setTelefone(''); setEmail(''); setCapPeso(''); setCapVolume(''); setOpen(false);
   };
 
   const checkin = (id: string) => {
