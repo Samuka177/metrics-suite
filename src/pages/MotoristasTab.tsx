@@ -67,6 +67,16 @@ export default function MotoristasTab() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
+                <label className="text-xs font-medium">WhatsApp</label>
+                <Input value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 99999-0000" />
+              </div>
+              <div>
+                <label className="text-xs font-medium">E-mail</label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="motorista@email.com" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
                 <label className="text-xs font-medium"><Weight className="inline h-3 w-3 mr-0.5" />Capacidade (kg)</label>
                 <Input type="number" value={capPeso} onChange={e => setCapPeso(e.target.value)} placeholder="Ex: 100" />
               </div>
