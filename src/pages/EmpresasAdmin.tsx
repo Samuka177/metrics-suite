@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Building2, Plus, UserPlus, RefreshCw } from 'lucide-react';
+import { Building2, Plus, UserPlus, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 interface Company { id: string; name: string; email_domain: string; created_at: string }
