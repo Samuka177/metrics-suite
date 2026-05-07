@@ -79,6 +79,7 @@ function rowToMotorista(r: any): Motorista {
     capacidadePeso: r.capacidade_peso ?? undefined, capacidadeVolume: r.capacidade_volume ?? undefined,
     cor: r.cor || DRIVER_COLORS[0],
     checkinTime: r.checkin_time ?? undefined, checkoutTime: r.checkout_time ?? undefined,
+    telefone: r.telefone ?? undefined, email: r.email ?? undefined,
   };
 }
 
