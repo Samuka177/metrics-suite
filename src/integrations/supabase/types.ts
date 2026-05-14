@@ -410,6 +410,33 @@ export type Database = {
           },
         ]
       }
+      rota_templates: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          paradas: Json
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          paradas?: Json
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          paradas?: Json
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           company_id: string
