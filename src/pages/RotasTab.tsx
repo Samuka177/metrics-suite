@@ -410,8 +410,8 @@ export default function RotasTab() {
         <AddParadaSheet />
         {!executionMode ? (
           <>
-            <Button variant="outline" size="sm" onClick={() => { otimizarRota(); toast.success('Rota otimizada!'); }}>
-              <Zap className="h-4 w-4 mr-1" /> Otimizar
+            <Button size="sm" onClick={handleRoteirizar}>
+              <Zap className="h-4 w-4 mr-1" /> Roteirizar
             </Button>
             {motoristas.length > 0 && (
               <Button variant="outline" size="sm" onClick={() => { distribuirAutomaticamente(); toast.success('Paradas distribuídas!'); }}>
@@ -432,14 +432,14 @@ export default function RotasTab() {
         <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
           <Upload className="h-4 w-4 mr-1" /> Importar
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowTemplates(true)}>
+          <Bookmark className="h-4 w-4 mr-1" /> Templates
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setShowMap(v => !v)}>
           <Map className="h-4 w-4 mr-1" /> {showMap ? 'Ocultar' : 'Mapa'}
         </Button>
         {canUndo && <Button variant="ghost" size="sm" onClick={undo}><Undo2 className="h-4 w-4" /></Button>}
         {canRedo && <Button variant="ghost" size="sm" onClick={redo}><Redo2 className="h-4 w-4" /></Button>}
-        {paradas.length === 0 && (
-          <Button variant="outline" size="sm" onClick={carregarDemo}><Database className="h-4 w-4 mr-1" /> Demo SP</Button>
-        )}
         {historyActions.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}><History className="h-4 w-4" /></Button>
         )}
