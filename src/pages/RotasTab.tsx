@@ -342,12 +342,13 @@ export default function RotasTab() {
   const falhou = paradas.filter(p => p.status === 'falhou').length;
   const progressPct = total > 0 ? Math.round((entregues / total) * 100) : 0;
 
-  const carregarDemo = useCallback(() => {
-    MOCK_PARADAS_SP.forEach(m => {
-      addParada({ nome: m.nome, endereco: m.endereco, tipo: 'Ponto fixo', lat: m.lat, lng: m.lng, peso: Math.round(Math.random() * 30 + 5), volume: +(Math.random() * 0.5 + 0.1).toFixed(2), produtos: [] });
-    });
-    toast.success('5 paradas demo carregadas!');
-  }, [addParada]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+
+  const handleRoteirizar = useCallback(() => {
+    if (paradas.length === 0) { toast.error('Adicione paradas primeiro'); return; }
+    setShowReview(true);
+  }, [paradas.length]);
 
   const motoristasList = motoristas.map(m => ({ id: m.id, nome: m.nome, cor: m.cor }));
 
