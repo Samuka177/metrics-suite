@@ -11,15 +11,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Plus, MapPin, Clock, Package, CheckCircle2, Truck, Eye, Trash2, Map, Zap, Database,
+  Plus, MapPin, Clock, Package, CheckCircle2, Truck, Trash2, Map, Zap,
   Upload, Play, Pause, XCircle, RotateCcw, Undo2, Redo2, Weight, Box, AlertTriangle,
-  ArrowUp, Edit2, MessageSquare, Timer, History, Send
+  ArrowUp, Edit2, MessageSquare, Timer, History, Send, Copy, Bookmark, AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
-import { MOCK_PARADAS_SP } from '@/utils/routeOptimization';
 import ImportModal from '@/components/import/ImportModal';
-import { sendRouteViaWhatsApp } from '@/utils/whatsapp';
+import { sendRouteViaWhatsApp, buildRouteLink } from '@/utils/whatsapp';
+import RouteTemplatesDialog from '@/components/routes/RouteTemplatesDialog';
+import AddressReviewDialog from '@/components/routes/AddressReviewDialog';
+import { needsAddressReview } from '@/utils/addressValidation';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
@@ -324,7 +326,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 export default function RotasTab() {
   const {
-    paradas, motoristas, roteirizar, otimizarRota, reorderParadas, addParada,
+    paradas, motoristas, otimizarRota, reorderParadas,
     lastOptimization, executionMode, currentStopIndex, capacityWarnings,
     iniciarRota, pararRota, distribuirAutomaticamente, historyActions,
     undo, redo, canUndo, canRedo, config, setConfig,
@@ -340,12 +342,13 @@ export default function RotasTab() {
   const falhou = paradas.filter(p => p.status === 'falhou').length;
   const progressPct = total > 0 ? Math.round((entregues / total) * 100) : 0;
 
-  const carregarDemo = useCallback(() => {
-    MOCK_PARADAS_SP.forEach(m => {
-      addParada({ nome: m.nome, endereco: m.endereco, tipo: 'Ponto fixo', lat: m.lat, lng: m.lng, peso: Math.round(Math.random() * 30 + 5), volume: +(Math.random() * 0.5 + 0.1).toFixed(2), produtos: [] });
-    });
-    toast.success('5 paradas demo carregadas!');
-  }, [addParada]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+
+  const handleRoteirizar = useCallback(() => {
+    if (paradas.length === 0) { toast.error('Adicione paradas primeiro'); return; }
+    setShowReview(true);
+  }, [paradas.length]);
 
   const motoristasList = motoristas.map(m => ({ id: m.id, nome: m.nome, cor: m.cor }));
 
@@ -407,8 +410,8 @@ export default function RotasTab() {
         <AddParadaSheet />
         {!executionMode ? (
           <>
-            <Button variant="outline" size="sm" onClick={() => { otimizarRota(); toast.success('Rota otimizada!'); }}>
-              <Zap className="h-4 w-4 mr-1" /> Otimizar
+            <Button size="sm" onClick={handleRoteirizar}>
+              <Zap className="h-4 w-4 mr-1" /> Roteirizar
             </Button>
             {motoristas.length > 0 && (
               <Button variant="outline" size="sm" onClick={() => { distribuirAutomaticamente(); toast.success('Paradas distribuídas!'); }}>
@@ -429,14 +432,14 @@ export default function RotasTab() {
         <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
           <Upload className="h-4 w-4 mr-1" /> Importar
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowTemplates(true)}>
+          <Bookmark className="h-4 w-4 mr-1" /> Templates
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setShowMap(v => !v)}>
           <Map className="h-4 w-4 mr-1" /> {showMap ? 'Ocultar' : 'Mapa'}
         </Button>
         {canUndo && <Button variant="ghost" size="sm" onClick={undo}><Undo2 className="h-4 w-4" /></Button>}
         {canRedo && <Button variant="ghost" size="sm" onClick={redo}><Redo2 className="h-4 w-4" /></Button>}
-        {paradas.length === 0 && (
-          <Button variant="outline" size="sm" onClick={carregarDemo}><Database className="h-4 w-4 mr-1" /> Demo SP</Button>
-        )}
         {historyActions.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}><History className="h-4 w-4" /></Button>
         )}
@@ -473,36 +476,77 @@ export default function RotasTab() {
       </Dialog>
 
       <ImportModal open={showImport} onOpenChange={setShowImport} />
+      <RouteTemplatesDialog open={showTemplates} onOpenChange={setShowTemplates} />
+      <AddressReviewDialog
+        open={showReview}
+        onOpenChange={setShowReview}
+        onAllConfirmed={() => {
+          otimizarRota();
+          toast.success('Rota otimizada!');
+        }}
+      />
 
-      {/* Enviar rota via WhatsApp por motorista */}
+      {/* Aviso de endereços a verificar */}
+      {paradas.length > 0 && paradas.some(p => needsAddressReview(p)) && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="p-2.5 flex items-center gap-2 text-xs">
+            <AlertCircle className="h-4 w-4 text-warning shrink-0" />
+            <span className="text-foreground">
+              {paradas.filter(p => needsAddressReview(p)).length} endereço(s) sem CEP ou número.
+            </span>
+            <Button size="sm" variant="outline" className="h-6 text-[11px] ml-auto" onClick={() => setShowReview(true)}>
+              Revisar
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Enviar rota via WhatsApp + copiar link */}
       {motoristas.some(m => paradas.some(p => p.motoristaId === m.id)) && (
         <Card>
           <CardContent className="p-3 space-y-2">
             <p className="text-xs font-semibold text-foreground flex items-center gap-1">
-              <Send className="h-3.5 w-3.5" /> Enviar rota por WhatsApp
+              <Send className="h-3.5 w-3.5" /> Enviar rota por motorista
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="space-y-1.5">
               {motoristas.map(m => {
                 const paradasMot = paradas.filter(p => p.motoristaId === m.id);
                 if (paradasMot.length === 0) return null;
                 return (
-                  <Button
-                    key={m.id}
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[11px]"
-                    onClick={() => {
-                      if (!m.telefone) {
-                        toast.error(`${m.nome} não possui WhatsApp cadastrado`);
-                        return;
-                      }
-                      const ok = sendRouteViaWhatsApp(m, paradasMot);
-                      if (ok) toast.success(`Rota enviada para ${m.nome}`);
-                    }}
-                  >
-                    <span className="h-2 w-2 rounded-full mr-1.5" style={{ backgroundColor: m.cor }} />
-                    {m.nome.split(' ')[0]} ({paradasMot.length})
-                  </Button>
+                  <div key={m.id} className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] flex items-center gap-1 mr-1">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: m.cor }} />
+                      <strong>{m.nome.split(' ')[0]}</strong>
+                      <span className="text-muted-foreground">({paradasMot.length})</span>
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={() => {
+                        if (!m.telefone) { toast.error(`${m.nome} não possui WhatsApp`); return; }
+                        if (sendRouteViaWhatsApp(m, paradasMot)) toast.success(`Rota enviada para ${m.nome}`);
+                      }}
+                    >
+                      <Send className="h-3 w-3 mr-1" /> WhatsApp
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={async () => {
+                        const link = buildRouteLink(paradasMot);
+                        try {
+                          await navigator.clipboard.writeText(link);
+                          toast.success('Link do Google Maps copiado!');
+                        } catch {
+                          toast.error('Não foi possível copiar');
+                        }
+                      }}
+                    >
+                      <Copy className="h-3 w-3 mr-1" /> Copiar link
+                    </Button>
+                  </div>
                 );
               })}
             </div>

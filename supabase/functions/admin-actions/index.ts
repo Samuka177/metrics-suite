@@ -91,6 +91,61 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    if (action === 'list_company_users') {
+      const { company_id } = body;
+      if (!company_id) return new Response(JSON.stringify({ error: 'missing company_id' }), { status: 400, headers: corsHeaders });
+      const { data: profiles } = await admin.from('profiles')
+        .select('user_id, email, full_name, created_at')
+        .eq('company_id', company_id);
+      const { data: roles } = await admin.from('user_roles')
+        .select('user_id, role')
+        .eq('company_id', company_id);
+      const users = (profiles || []).map(p => ({
+        ...p,
+        roles: (roles || []).filter(r => r.user_id === p.user_id).map(r => r.role),
+      }));
+      return new Response(JSON.stringify({ users }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'delete_company') {
+      const { company_id } = body;
+      if (!company_id) return new Response(JSON.stringify({ error: 'missing company_id' }), { status: 400, headers: corsHeaders });
+
+      // Buscar todos os usuários da empresa
+      const { data: profs } = await admin.from('profiles').select('user_id').eq('company_id', company_id);
+      const userIds = (profs || []).map(p => p.user_id);
+
+      // Apagar dados da empresa
+      await admin.from('paradas').delete().eq('company_id', company_id);
+      await admin.from('motoristas').delete().eq('company_id', company_id);
+      await admin.from('fiscal_notes').delete().eq('company_id', company_id);
+      await admin.from('rota_templates').delete().eq('company_id', company_id);
+      await admin.from('invitations').delete().eq('company_id', company_id);
+      await admin.from('audit_logs').delete().eq('company_id', company_id);
+      await admin.from('user_roles').delete().eq('company_id', company_id);
+      await admin.from('profiles').delete().eq('company_id', company_id);
+
+      // Apagar usuários do auth (apenas se não tiverem outra empresa)
+      for (const uid of userIds) {
+        const { data: other } = await admin.from('profiles').select('id').eq('user_id', uid).limit(1);
+        if (!other || other.length === 0) {
+          await admin.auth.admin.deleteUser(uid);
+        }
+      }
+
+      await admin.from('companies').delete().eq('id', company_id);
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'delete_user') {
+      const { user_id } = body;
+      if (!user_id) return new Response(JSON.stringify({ error: 'missing user_id' }), { status: 400, headers: corsHeaders });
+      await admin.from('user_roles').delete().eq('user_id', user_id);
+      await admin.from('profiles').delete().eq('user_id', user_id);
+      await admin.auth.admin.deleteUser(user_id);
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400, headers: corsHeaders });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

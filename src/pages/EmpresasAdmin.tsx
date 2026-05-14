@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Building2, Plus, UserPlus, RefreshCw, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Building2, Plus, UserPlus, RefreshCw, ArrowLeft, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Company { id: string; name: string; email_domain: string; created_at: string }
+interface CompanyUser { user_id: string; email: string; full_name: string | null; created_at: string; roles: string[] }
 
 export default function EmpresasAdmin() {
   const { isSuperAdmin } = useAuth();
@@ -19,6 +24,11 @@ export default function EmpresasAdmin() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [openNew, setOpenNew] = useState(false);
   const [openUser, setOpenUser] = useState<Company | null>(null);
+  const [openMembers, setOpenMembers] = useState<Company | null>(null);
+  const [members, setMembers] = useState<CompanyUser[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Company | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<CompanyUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -42,6 +52,18 @@ export default function EmpresasAdmin() {
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+
+  const loadMembers = async (c: Company) => {
+    setOpenMembers(c);
+    setLoadingMembers(true);
+    setMembers([]);
+    const { data, error } = await supabase.functions.invoke('admin-actions', {
+      body: { action: 'list_company_users', company_id: c.id },
+    });
+    setLoadingMembers(false);
+    if (error || data?.error) { toast.error(data?.error || error?.message || 'Erro'); return; }
+    setMembers((data?.users || []) as CompanyUser[]);
+  };
 
   const createCompany = async () => {
     if (!cName || !cDomain || !aEmail || !aPass) { toast.error('Preencha todos os campos'); return; }
@@ -76,6 +98,32 @@ export default function EmpresasAdmin() {
     setOpenUser(null);
   };
 
+  const deleteCompany = async () => {
+    if (!confirmDelete) return;
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke('admin-actions', {
+      body: { action: 'delete_company', company_id: confirmDelete.id },
+    });
+    setBusy(false);
+    if (error || data?.error) { toast.error(data?.error || error?.message || 'Erro'); return; }
+    toast.success('Empresa excluída.');
+    setConfirmDelete(null);
+    load();
+  };
+
+  const deleteUser = async () => {
+    if (!confirmDeleteUser || !openMembers) return;
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke('admin-actions', {
+      body: { action: 'delete_user', user_id: confirmDeleteUser.user_id },
+    });
+    setBusy(false);
+    if (error || data?.error) { toast.error(data?.error || error?.message || 'Erro'); return; }
+    toast.success('Usuário excluído.');
+    setConfirmDeleteUser(null);
+    loadMembers(openMembers);
+  };
+
   return (
     <div className="space-y-4 fade-in pb-4">
       <Button variant="ghost" size="sm" asChild className="-ml-2">
@@ -100,20 +148,29 @@ export default function EmpresasAdmin() {
         <div className="space-y-2">
           {companies.map(c => (
             <Card key={c.id}>
-              <CardContent className="p-3 flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{c.name}</p>
+              <CardContent className="p-3 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{c.name}</p>
                   <p className="text-xs text-muted-foreground">@{c.email_domain}</p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setOpenUser(c)}>
-                  <UserPlus className="h-4 w-4 mr-1" /> Novo usuário
-                </Button>
+                <div className="flex gap-1.5 shrink-0">
+                  <Button size="sm" variant="outline" onClick={() => loadMembers(c)}>
+                    <Users className="h-4 w-4 mr-1" /> Colaboradores
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setOpenUser(c)}>
+                    <UserPlus className="h-4 w-4 mr-1" /> Novo usuário
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(c)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
+      {/* Nova empresa */}
       <Dialog open={openNew} onOpenChange={setOpenNew}>
         <DialogContent>
           <DialogHeader><DialogTitle>Nova empresa + administrador</DialogTitle></DialogHeader>
@@ -134,6 +191,7 @@ export default function EmpresasAdmin() {
         </DialogContent>
       </Dialog>
 
+      {/* Novo usuário */}
       <Dialog open={!!openUser} onOpenChange={() => setOpenUser(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Novo usuário em {openUser?.name}</DialogTitle></DialogHeader>
@@ -155,6 +213,76 @@ export default function EmpresasAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Lista de colaboradores */}
+      <Dialog open={!!openMembers} onOpenChange={() => setOpenMembers(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Colaboradores — {openMembers?.name}</DialogTitle></DialogHeader>
+          {loadingMembers ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
+          ) : members.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Nenhum colaborador.</p>
+          ) : (
+            <div className="space-y-2">
+              {members.map(u => (
+                <Card key={u.user_id}>
+                  <CardContent className="p-3 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{u.full_name || '—'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                      <div className="flex gap-1 mt-1">
+                        {u.roles.length === 0 && <Badge variant="outline" className="text-[10px]">sem papel</Badge>}
+                        {u.roles.map(r => (
+                          <Badge key={r} variant={r === 'admin' || r === 'super_admin' ? 'default' : 'secondary'} className="text-[10px]">{r}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive shrink-0" onClick={() => setConfirmDeleteUser(u)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm delete company */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={() => setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir empresa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso apaga <strong>{confirmDelete?.name}</strong>, todos os usuários, paradas, motoristas, notas, templates e logs. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={busy} onClick={deleteCompany} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              {busy ? 'Excluindo...' : 'Excluir definitivamente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm delete user */}
+      <AlertDialog open={!!confirmDeleteUser} onOpenChange={() => setConfirmDeleteUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir colaborador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove <strong>{confirmDeleteUser?.email}</strong> da empresa e do sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={busy} onClick={deleteUser} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              {busy ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
