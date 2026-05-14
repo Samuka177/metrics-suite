@@ -11,15 +11,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Plus, MapPin, Clock, Package, CheckCircle2, Truck, Eye, Trash2, Map, Zap, Database,
+  Plus, MapPin, Clock, Package, CheckCircle2, Truck, Trash2, Map, Zap,
   Upload, Play, Pause, XCircle, RotateCcw, Undo2, Redo2, Weight, Box, AlertTriangle,
-  ArrowUp, Edit2, MessageSquare, Timer, History, Send
+  ArrowUp, Edit2, MessageSquare, Timer, History, Send, Copy, Bookmark, AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TipoEntrega, Parada } from '@/types/rotafacil';
-import { MOCK_PARADAS_SP } from '@/utils/routeOptimization';
 import ImportModal from '@/components/import/ImportModal';
-import { sendRouteViaWhatsApp } from '@/utils/whatsapp';
+import { sendRouteViaWhatsApp, buildRouteLink } from '@/utils/whatsapp';
+import RouteTemplatesDialog from '@/components/routes/RouteTemplatesDialog';
+import AddressReviewDialog from '@/components/routes/AddressReviewDialog';
+import { needsAddressReview } from '@/utils/addressValidation';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 
