@@ -326,7 +326,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 export default function RotasTab() {
   const {
-    paradas, motoristas, roteirizar, otimizarRota, reorderParadas, addParada,
+    paradas, motoristas, otimizarRota, reorderParadas,
     lastOptimization, executionMode, currentStopIndex, capacityWarnings,
     iniciarRota, pararRota, distribuirAutomaticamente, historyActions,
     undo, redo, canUndo, canRedo, config, setConfig,
