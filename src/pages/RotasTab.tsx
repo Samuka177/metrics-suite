@@ -476,36 +476,77 @@ export default function RotasTab() {
       </Dialog>
 
       <ImportModal open={showImport} onOpenChange={setShowImport} />
+      <RouteTemplatesDialog open={showTemplates} onOpenChange={setShowTemplates} />
+      <AddressReviewDialog
+        open={showReview}
+        onOpenChange={setShowReview}
+        onAllConfirmed={() => {
+          otimizarRota();
+          toast.success('Rota otimizada!');
+        }}
+      />
 
-      {/* Enviar rota via WhatsApp por motorista */}
+      {/* Aviso de endereços a verificar */}
+      {paradas.length > 0 && paradas.some(p => needsAddressReview(p)) && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="p-2.5 flex items-center gap-2 text-xs">
+            <AlertCircle className="h-4 w-4 text-warning shrink-0" />
+            <span className="text-foreground">
+              {paradas.filter(p => needsAddressReview(p)).length} endereço(s) sem CEP ou número.
+            </span>
+            <Button size="sm" variant="outline" className="h-6 text-[11px] ml-auto" onClick={() => setShowReview(true)}>
+              Revisar
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Enviar rota via WhatsApp + copiar link */}
       {motoristas.some(m => paradas.some(p => p.motoristaId === m.id)) && (
         <Card>
           <CardContent className="p-3 space-y-2">
             <p className="text-xs font-semibold text-foreground flex items-center gap-1">
-              <Send className="h-3.5 w-3.5" /> Enviar rota por WhatsApp
+              <Send className="h-3.5 w-3.5" /> Enviar rota por motorista
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="space-y-1.5">
               {motoristas.map(m => {
                 const paradasMot = paradas.filter(p => p.motoristaId === m.id);
                 if (paradasMot.length === 0) return null;
                 return (
-                  <Button
-                    key={m.id}
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[11px]"
-                    onClick={() => {
-                      if (!m.telefone) {
-                        toast.error(`${m.nome} não possui WhatsApp cadastrado`);
-                        return;
-                      }
-                      const ok = sendRouteViaWhatsApp(m, paradasMot);
-                      if (ok) toast.success(`Rota enviada para ${m.nome}`);
-                    }}
-                  >
-                    <span className="h-2 w-2 rounded-full mr-1.5" style={{ backgroundColor: m.cor }} />
-                    {m.nome.split(' ')[0]} ({paradasMot.length})
-                  </Button>
+                  <div key={m.id} className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] flex items-center gap-1 mr-1">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: m.cor }} />
+                      <strong>{m.nome.split(' ')[0]}</strong>
+                      <span className="text-muted-foreground">({paradasMot.length})</span>
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={() => {
+                        if (!m.telefone) { toast.error(`${m.nome} não possui WhatsApp`); return; }
+                        if (sendRouteViaWhatsApp(m, paradasMot)) toast.success(`Rota enviada para ${m.nome}`);
+                      }}
+                    >
+                      <Send className="h-3 w-3 mr-1" /> WhatsApp
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={async () => {
+                        const link = buildRouteLink(paradasMot);
+                        try {
+                          await navigator.clipboard.writeText(link);
+                          toast.success('Link do Google Maps copiado!');
+                        } catch {
+                          toast.error('Não foi possível copiar');
+                        }
+                      }}
+                    >
+                      <Copy className="h-3 w-3 mr-1" /> Copiar link
+                    </Button>
+                  </div>
                 );
               })}
             </div>
