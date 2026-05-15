@@ -102,19 +102,6 @@ Deno.serve(async (req) => {
       });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-      await admin.from('profiles').insert({
-        user_id: created.user.id, company_id, email, full_name: full_name || email,
-      });
-      await admin.from('user_roles').insert({
-        user_id: created.user.id, company_id, role: role || 'member',
-      });
-      await admin.from('audit_logs').insert({
-        company_id, user_id: user.id, user_email: user.email,
-        action: 'create_user', entity_type: 'user', entity_id: created.user.id,
-        details: { email, role: role || 'member' },
-      });
-      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
 
     if (action === 'list_company_users') {
       const { company_id } = body;
