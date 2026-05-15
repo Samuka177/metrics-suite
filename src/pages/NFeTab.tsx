@@ -13,11 +13,19 @@ interface ParsedNote {
   numero?: string; serie?: string; chave?: string;
   emitente_nome?: string; emitente_cnpj?: string;
   destinatario_nome?: string; destinatario_cnpj?: string;
+  destinatario_logradouro?: string; destinatario_numero?: string; destinatario_bairro?: string;
   destinatario_endereco?: string; destinatario_municipio?: string;
   destinatario_uf?: string; destinatario_cep?: string;
   valor_total?: number; peso_kg?: number; volume_m3?: number;
   itens?: { nome: string; quantidade?: number; unidade?: string; valor?: number }[];
 }
+
+const FIELD_LABELS: Record<string, string> = {
+  logradouro: 'Logradouro (rua/avenida)',
+  numero: 'Número',
+  municipio: 'Município',
+  uf: 'UF',
+};
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
