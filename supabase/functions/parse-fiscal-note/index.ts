@@ -125,7 +125,7 @@ async function parseWithAI(base64: string, mimeType: string, filename: string): 
     {
       role: "system",
       content:
-        "Você é um extrator de dados de notas fiscais brasileiras (NF-e/DANFE). Extraia os dados do destinatário (nome, CNPJ, endereço completo, município, UF, CEP), número da nota, valor total, peso (kg), volume (m³) e itens. Responda APENAS chamando a função extract_note. Para itens repetidos, agregue.",
+        "Você é um extrator de dados de notas fiscais brasileiras (NF-e/DANFE). Extraia os dados do destinatário separando claramente: logradouro (somente o nome da rua/avenida, sem número), número (somente o número da rua), bairro, município, UF (sigla), CEP. Também extraia número da nota, valor total, peso (kg), volume (m³) e itens. Se algum campo não estiver legível ou não existir no documento, OMITA o campo (não invente). Para itens repetidos, agregue. Responda APENAS chamando a função extract_note.",
     },
   ];
 
