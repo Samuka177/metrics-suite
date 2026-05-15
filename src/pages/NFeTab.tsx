@@ -40,6 +40,10 @@ export default function NFeTab() {
   const { addParada } = useApp();
   const { profile } = useAuth();
   const [nfe, setNfe] = useState<ParsedNote | null>(null);
+  const [missing, setMissing] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [edit, setEdit] = useState({ logradouro: '', numero: '', bairro: '', municipio: '', uf: '', cep: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -49,7 +53,7 @@ export default function NFeTab() {
 
   const processFile = async (file: File) => {
     if (!profile?.company_id) return;
-    setError(''); setNfe(null); setLoading(true);
+    setError(''); setNfe(null); setMissing([]); setWarnings([]); setEditing(false); setLoading(true);
     setProgress(10); setProgressLabel('Lendo arquivo...');
     try {
       const base64 = await fileToBase64(file);
@@ -60,23 +64,50 @@ export default function NFeTab() {
       if (fnErr) throw new Error(fnErr.message);
       if (data?.error) throw new Error(data.error);
       setProgress(80); setProgressLabel('Salvando nota...');
-      setNfe(data.parsed);
+      const parsed: ParsedNote = data.parsed;
+      const missingFields: string[] = data.missing_fields || [];
+      const warns: string[] = data.warnings || [];
+      setNfe(parsed);
+      setMissing(missingFields);
+      setWarnings(warns);
       setSourceFormat(data.source_format);
+      setEdit({
+        logradouro: parsed.destinatario_logradouro || '',
+        numero: parsed.destinatario_numero || '',
+        bairro: parsed.destinatario_bairro || '',
+        municipio: parsed.destinatario_municipio || '',
+        uf: parsed.destinatario_uf || '',
+        cep: parsed.destinatario_cep || '',
+      });
+
+      const status = missingFields.length > 0 ? 'incompleto' : 'parsed';
+      const errMsg = missingFields.length > 0
+        ? `Campos não lidos pela IA: ${missingFields.map(f => FIELD_LABELS[f] || f).join(', ')}`
+        : warns.length > 0 ? warns.join(' · ') : null;
 
       const { data: saved } = await supabase.from('fiscal_notes').insert({
         company_id: profile.company_id,
         source_format: data.source_format,
         arquivo_nome: file.name,
         arquivo_tipo: file.type,
-        status: 'parsed',
-        ...data.parsed,
-        raw_extracted: data.parsed,
+        status,
+        error_message: errMsg,
+        ...parsed,
+        raw_extracted: parsed,
       }).select().single();
       await logAction(profile.company_id, 'upload_nota', { type: 'fiscal_note', id: saved?.id }, {
         arquivo: file.name, formato: data.source_format,
+        missing_fields: missingFields, warnings: warns,
       });
       setProgress(100);
-      toast.success('Nota lida com sucesso!');
+      if (missingFields.length > 0) {
+        toast.warning(`Nota lida, mas ${missingFields.length} campo(s) faltando. Corrija manualmente.`);
+        setEditing(true);
+      } else if (warns.length > 0) {
+        toast.warning('Nota lida com avisos. Verifique antes de roteirizar.');
+      } else {
+        toast.success('Nota lida com sucesso!');
+      }
     } catch (err: any) {
       const msg = err.message || 'Erro ao processar arquivo';
       setError(msg);
@@ -104,8 +135,45 @@ export default function NFeTab() {
     if (file) await processFile(file);
   };
 
+  const applyEdit = () => {
+    if (!nfe) return;
+    const enderecoTxt = [
+      edit.logradouro && edit.numero ? `${edit.logradouro}, ${edit.numero}` : edit.logradouro,
+      edit.bairro,
+    ].filter(Boolean).join(', ');
+    const updated: ParsedNote = {
+      ...nfe,
+      destinatario_logradouro: edit.logradouro || undefined,
+      destinatario_numero: edit.numero || undefined,
+      destinatario_bairro: edit.bairro || undefined,
+      destinatario_endereco: enderecoTxt || nfe.destinatario_endereco,
+      destinatario_municipio: edit.municipio || undefined,
+      destinatario_uf: edit.uf.toUpperCase() || undefined,
+      destinatario_cep: edit.cep || undefined,
+    };
+    setNfe(updated);
+    // Recalcula missing
+    const stillMissing: string[] = [];
+    if (!edit.logradouro.trim()) stillMissing.push('logradouro');
+    if (!edit.numero.trim()) stillMissing.push('numero');
+    if (!edit.municipio.trim()) stillMissing.push('municipio');
+    if (!edit.uf.trim()) stillMissing.push('uf');
+    setMissing(stillMissing);
+    if (stillMissing.length === 0) {
+      setEditing(false);
+      toast.success('Endereço corrigido');
+    } else {
+      toast.error(`Ainda faltam: ${stillMissing.map(f => FIELD_LABELS[f]).join(', ')}`);
+    }
+  };
+
   const addToRoute = async () => {
     if (!nfe) return;
+    if (missing.length > 0) {
+      toast.error(`Corrija os campos faltantes antes de adicionar à rota: ${missing.map(f => FIELD_LABELS[f]).join(', ')}`);
+      setEditing(true);
+      return;
+    }
     const enderecoCompleto = [
       nfe.destinatario_endereco, nfe.destinatario_municipio,
       nfe.destinatario_uf, nfe.destinatario_cep,
@@ -121,7 +189,7 @@ export default function NFeTab() {
       })),
     });
     toast.success('Adicionada à rota!');
-    setNfe(null);
+    setNfe(null); setMissing([]); setWarnings([]);
   };
 
   return (
