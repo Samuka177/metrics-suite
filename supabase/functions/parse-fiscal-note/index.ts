@@ -254,7 +254,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ source_format, parsed }), {
+    const validation = validateParsed(parsed);
+    return new Response(JSON.stringify({ source_format, parsed, ...validation }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
