@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle2, Edit2, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { needsAddressReview } from '@/utils/addressValidation';
+import { logAction } from '@/utils/audit';
+import { supabase } from '@/integrations/supabase/client';
 import type { Parada } from '@/types/rotafacil';
 
 interface Props {
