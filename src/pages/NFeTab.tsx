@@ -3,8 +3,10 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { FileText, Upload, Plus, X, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { FileText, Upload, Plus, X, AlertCircle, AlertTriangle, Loader2, Sparkles, Edit2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { logAction } from '@/utils/audit';
@@ -13,11 +15,19 @@ interface ParsedNote {
   numero?: string; serie?: string; chave?: string;
   emitente_nome?: string; emitente_cnpj?: string;
   destinatario_nome?: string; destinatario_cnpj?: string;
+  destinatario_logradouro?: string; destinatario_numero?: string; destinatario_bairro?: string;
   destinatario_endereco?: string; destinatario_municipio?: string;
   destinatario_uf?: string; destinatario_cep?: string;
   valor_total?: number; peso_kg?: number; volume_m3?: number;
   itens?: { nome: string; quantidade?: number; unidade?: string; valor?: number }[];
 }
+
+const FIELD_LABELS: Record<string, string> = {
+  logradouro: 'Logradouro (rua/avenida)',
+  numero: 'Número',
+  municipio: 'Município',
+  uf: 'UF',
+};
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -32,6 +42,10 @@ export default function NFeTab() {
   const { addParada } = useApp();
   const { profile } = useAuth();
   const [nfe, setNfe] = useState<ParsedNote | null>(null);
+  const [missing, setMissing] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [edit, setEdit] = useState({ logradouro: '', numero: '', bairro: '', municipio: '', uf: '', cep: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -41,7 +55,7 @@ export default function NFeTab() {
 
   const processFile = async (file: File) => {
     if (!profile?.company_id) return;
-    setError(''); setNfe(null); setLoading(true);
+    setError(''); setNfe(null); setMissing([]); setWarnings([]); setEditing(false); setLoading(true);
     setProgress(10); setProgressLabel('Lendo arquivo...');
     try {
       const base64 = await fileToBase64(file);
@@ -52,23 +66,52 @@ export default function NFeTab() {
       if (fnErr) throw new Error(fnErr.message);
       if (data?.error) throw new Error(data.error);
       setProgress(80); setProgressLabel('Salvando nota...');
-      setNfe(data.parsed);
+      const parsed: ParsedNote = data.parsed;
+      const missingFields: string[] = data.missing_fields || [];
+      const warns: string[] = data.warnings || [];
+      setNfe(parsed);
+      setMissing(missingFields);
+      setWarnings(warns);
       setSourceFormat(data.source_format);
+      setEdit({
+        logradouro: parsed.destinatario_logradouro || '',
+        numero: parsed.destinatario_numero || '',
+        bairro: parsed.destinatario_bairro || '',
+        municipio: parsed.destinatario_municipio || '',
+        uf: parsed.destinatario_uf || '',
+        cep: parsed.destinatario_cep || '',
+      });
 
+      const status = missingFields.length > 0 ? 'incompleto' : 'parsed';
+      const errMsg = missingFields.length > 0
+        ? `Campos não lidos pela IA: ${missingFields.map(f => FIELD_LABELS[f] || f).join(', ')}`
+        : warns.length > 0 ? warns.join(' · ') : null;
+
+      // Remove campos auxiliares (logradouro/numero/bairro) que não existem na tabela
+      const { destinatario_logradouro, destinatario_numero, destinatario_bairro, ...parsedDb } = parsed;
       const { data: saved } = await supabase.from('fiscal_notes').insert({
         company_id: profile.company_id,
         source_format: data.source_format,
         arquivo_nome: file.name,
         arquivo_tipo: file.type,
-        status: 'parsed',
-        ...data.parsed,
-        raw_extracted: data.parsed,
+        status,
+        error_message: errMsg,
+        ...parsedDb,
+        raw_extracted: parsed as any,
       }).select().single();
       await logAction(profile.company_id, 'upload_nota', { type: 'fiscal_note', id: saved?.id }, {
         arquivo: file.name, formato: data.source_format,
+        missing_fields: missingFields, warnings: warns,
       });
       setProgress(100);
-      toast.success('Nota lida com sucesso!');
+      if (missingFields.length > 0) {
+        toast.warning(`Nota lida, mas ${missingFields.length} campo(s) faltando. Corrija manualmente.`);
+        setEditing(true);
+      } else if (warns.length > 0) {
+        toast.warning('Nota lida com avisos. Verifique antes de roteirizar.');
+      } else {
+        toast.success('Nota lida com sucesso!');
+      }
     } catch (err: any) {
       const msg = err.message || 'Erro ao processar arquivo';
       setError(msg);
@@ -96,8 +139,45 @@ export default function NFeTab() {
     if (file) await processFile(file);
   };
 
+  const applyEdit = () => {
+    if (!nfe) return;
+    const enderecoTxt = [
+      edit.logradouro && edit.numero ? `${edit.logradouro}, ${edit.numero}` : edit.logradouro,
+      edit.bairro,
+    ].filter(Boolean).join(', ');
+    const updated: ParsedNote = {
+      ...nfe,
+      destinatario_logradouro: edit.logradouro || undefined,
+      destinatario_numero: edit.numero || undefined,
+      destinatario_bairro: edit.bairro || undefined,
+      destinatario_endereco: enderecoTxt || nfe.destinatario_endereco,
+      destinatario_municipio: edit.municipio || undefined,
+      destinatario_uf: edit.uf.toUpperCase() || undefined,
+      destinatario_cep: edit.cep || undefined,
+    };
+    setNfe(updated);
+    // Recalcula missing
+    const stillMissing: string[] = [];
+    if (!edit.logradouro.trim()) stillMissing.push('logradouro');
+    if (!edit.numero.trim()) stillMissing.push('numero');
+    if (!edit.municipio.trim()) stillMissing.push('municipio');
+    if (!edit.uf.trim()) stillMissing.push('uf');
+    setMissing(stillMissing);
+    if (stillMissing.length === 0) {
+      setEditing(false);
+      toast.success('Endereço corrigido');
+    } else {
+      toast.error(`Ainda faltam: ${stillMissing.map(f => FIELD_LABELS[f]).join(', ')}`);
+    }
+  };
+
   const addToRoute = async () => {
     if (!nfe) return;
+    if (missing.length > 0) {
+      toast.error(`Corrija os campos faltantes antes de adicionar à rota: ${missing.map(f => FIELD_LABELS[f]).join(', ')}`);
+      setEditing(true);
+      return;
+    }
     const enderecoCompleto = [
       nfe.destinatario_endereco, nfe.destinatario_municipio,
       nfe.destinatario_uf, nfe.destinatario_cep,
@@ -113,7 +193,7 @@ export default function NFeTab() {
       })),
     });
     toast.success('Adicionada à rota!');
-    setNfe(null);
+    setNfe(null); setMissing([]); setWarnings([]);
   };
 
   return (
@@ -171,20 +251,90 @@ export default function NFeTab() {
               <button onClick={() => setNfe(null)}><X className="h-4 w-4 text-muted-foreground" /></button>
             </div>
 
-            <Card className="bg-primary/5 border-primary/20">
+            <Card className={missing.length > 0 ? 'bg-destructive/5 border-destructive/30' : 'bg-primary/5 border-primary/20'}>
               <CardContent className="p-3 space-y-1">
-                <p className="text-sm font-medium text-primary">{nfe.destinatario_endereco}</p>
+                <p className={`text-sm font-medium ${missing.length > 0 ? 'text-destructive' : 'text-primary'}`}>
+                  {nfe.destinatario_endereco || '(sem endereço)'}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {[nfe.destinatario_municipio, nfe.destinatario_uf, nfe.destinatario_cep].filter(Boolean).join(' · ')}
+                  {[nfe.destinatario_municipio, nfe.destinatario_uf, nfe.destinatario_cep].filter(Boolean).join(' · ') || '—'}
                 </p>
               </CardContent>
             </Card>
 
+            {(missing.length > 0 || warnings.length > 0) && (
+              <Card className="border-destructive/40 bg-destructive/5">
+                <CardContent className="p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-medium text-destructive">
+                        A IA não conseguiu ler todos os campos
+                      </p>
+                      {missing.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {missing.map(f => (
+                            <Badge key={f} variant="destructive" className="text-[10px]">
+                              ⚠ {FIELD_LABELS[f] || f}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      {warnings.map((w, i) => (
+                        <p key={i} className="text-xs text-destructive/80">⚠ {w}</p>
+                      ))}
+                      <p className="text-xs text-muted-foreground">
+                        Corrija manualmente abaixo antes de adicionar à rota.
+                      </p>
+                    </div>
+                    {!editing && (
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => setEditing(true)}>
+                        <Edit2 className="h-3 w-3 mr-1" /> Corrigir
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {editing && (
+              <Card>
+                <CardContent className="p-3 space-y-2">
+                  <p className="text-xs font-medium">Editar endereço do destinatário</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="Logradouro *" value={edit.logradouro}
+                      onChange={e => setEdit(s => ({ ...s, logradouro: e.target.value }))}
+                      className={`col-span-2 h-8 text-xs ${missing.includes('logradouro') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="Número *" value={edit.numero}
+                      onChange={e => setEdit(s => ({ ...s, numero: e.target.value }))}
+                      className={`h-8 text-xs ${missing.includes('numero') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="Bairro" value={edit.bairro}
+                      onChange={e => setEdit(s => ({ ...s, bairro: e.target.value }))}
+                      className="h-8 text-xs" />
+                    <Input placeholder="Município *" value={edit.municipio}
+                      onChange={e => setEdit(s => ({ ...s, municipio: e.target.value }))}
+                      className={`h-8 text-xs ${missing.includes('municipio') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="UF *" maxLength={2} value={edit.uf}
+                      onChange={e => setEdit(s => ({ ...s, uf: e.target.value.toUpperCase() }))}
+                      className={`h-8 text-xs ${missing.includes('uf') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="CEP" value={edit.cep}
+                      onChange={e => setEdit(s => ({ ...s, cep: e.target.value }))}
+                      className="col-span-2 h-8 text-xs" />
+                  </div>
+                  <div className="flex justify-end gap-1.5">
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
+                    <Button size="sm" onClick={applyEdit}><Save className="h-3.5 w-3.5 mr-1" /> Aplicar</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex gap-2">
-              <Button onClick={addToRoute} className="flex-1">
-                <Plus className="h-4 w-4 mr-1" /> Adicionar à rota
+              <Button onClick={addToRoute} className="flex-1" disabled={missing.length > 0}>
+                <Plus className="h-4 w-4 mr-1" />
+                {missing.length > 0 ? `Corrija ${missing.length} campo(s)` : 'Adicionar à rota'}
               </Button>
-              <Button variant="outline" onClick={() => setNfe(null)}>Limpar</Button>
+              <Button variant="outline" onClick={() => { setNfe(null); setMissing([]); setWarnings([]); setEditing(false); }}>Limpar</Button>
             </div>
           </CardContent>
         </Card>

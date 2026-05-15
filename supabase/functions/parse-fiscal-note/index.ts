@@ -15,6 +15,9 @@ interface ParsedNote {
   emitente_cnpj?: string;
   destinatario_nome?: string;
   destinatario_cnpj?: string;
+  destinatario_logradouro?: string;
+  destinatario_numero?: string;
+  destinatario_bairro?: string;
   destinatario_endereco?: string;
   destinatario_municipio?: string;
   destinatario_uf?: string;
@@ -24,6 +27,35 @@ interface ParsedNote {
   volume_m3?: number;
   itens?: { nome: string; quantidade?: number; unidade?: string; valor?: number }[];
 }
+
+const UF_VALIDAS = new Set([
+  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB',
+  'PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO',
+]);
+
+function isMissing(v?: string | null): boolean {
+  if (v === undefined || v === null) return true;
+  const t = String(v).trim().toUpperCase();
+  return !t || t === 'SEM' || t === 'N/A' || t === 'NA' || t === 'NULL' || t === '-' || t === '0' || t === 'XXXXX';
+}
+
+function validateParsed(p: ParsedNote): { missing_fields: string[]; warnings: string[] } {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  if (isMissing(p.destinatario_logradouro)) missing.push('logradouro');
+  if (isMissing(p.destinatario_numero)) missing.push('numero');
+  if (isMissing(p.destinatario_municipio)) missing.push('municipio');
+  if (isMissing(p.destinatario_uf)) missing.push('uf');
+  else if (!UF_VALIDAS.has(String(p.destinatario_uf).trim().toUpperCase())) {
+    warnings.push(`UF inválida: "${p.destinatario_uf}"`);
+  }
+  if (!isMissing(p.destinatario_cep)) {
+    const digits = String(p.destinatario_cep).replace(/\D/g, '');
+    if (digits.length !== 8) warnings.push(`CEP inválido: "${p.destinatario_cep}"`);
+  }
+  return { missing_fields: missing, warnings };
+}
+
 
 function parseXMLNote(xml: string): ParsedNote {
   // Remove namespaces para simplificar regex
@@ -61,6 +93,9 @@ function parseXMLNote(xml: string): ParsedNote {
 
   const chaveMatch = xml.match(/Id="NFe(\d{44})"/);
 
+  const lgr = get("xLgr", ender);
+  const nro = get("nro", ender);
+  const bairro = get("xBairro", ender);
   return {
     numero: get("nNF", ide),
     serie: get("serie", ide),
@@ -69,8 +104,10 @@ function parseXMLNote(xml: string): ParsedNote {
     emitente_cnpj: get("CNPJ", emit),
     destinatario_nome: get("xNome", dest),
     destinatario_cnpj: get("CNPJ", dest) || get("CPF", dest),
-    destinatario_endereco: [get("xLgr", ender), get("nro", ender), get("xBairro", ender)]
-      .filter(Boolean).join(", "),
+    destinatario_logradouro: lgr,
+    destinatario_numero: nro,
+    destinatario_bairro: bairro,
+    destinatario_endereco: [lgr, nro, bairro].filter(Boolean).join(", "),
     destinatario_municipio: get("xMun", ender),
     destinatario_uf: get("UF", ender),
     destinatario_cep: get("CEP", ender),
@@ -88,7 +125,7 @@ async function parseWithAI(base64: string, mimeType: string, filename: string): 
     {
       role: "system",
       content:
-        "Você é um extrator de dados de notas fiscais brasileiras (NF-e/DANFE). Extraia os dados do destinatário (nome, CNPJ, endereço completo, município, UF, CEP), número da nota, valor total, peso (kg), volume (m³) e itens. Responda APENAS chamando a função extract_note. Para itens repetidos, agregue.",
+        "Você é um extrator de dados de notas fiscais brasileiras (NF-e/DANFE). Extraia os dados do destinatário separando claramente: logradouro (somente o nome da rua/avenida, sem número), número (somente o número da rua), bairro, município, UF (sigla), CEP. Também extraia número da nota, valor total, peso (kg), volume (m³) e itens. Se algum campo não estiver legível ou não existir no documento, OMITA o campo (não invente). Para itens repetidos, agregue. Responda APENAS chamando a função extract_note.",
     },
   ];
 
@@ -123,7 +160,10 @@ async function parseWithAI(base64: string, mimeType: string, filename: string): 
           emitente_cnpj: { type: "string" },
           destinatario_nome: { type: "string" },
           destinatario_cnpj: { type: "string" },
-          destinatario_endereco: { type: "string", description: "Logradouro + número + bairro" },
+          destinatario_logradouro: { type: "string", description: "Apenas o nome da rua/avenida (sem número, sem bairro)" },
+          destinatario_numero: { type: "string", description: "Somente o número do endereço (ex: 1234, S/N)" },
+          destinatario_bairro: { type: "string" },
+          destinatario_endereco: { type: "string", description: "Logradouro + número + bairro (texto livre)" },
           destinatario_municipio: { type: "string" },
           destinatario_uf: { type: "string", description: "Sigla UF (SP, RJ...)" },
           destinatario_cep: { type: "string" },
@@ -170,8 +210,14 @@ async function parseWithAI(base64: string, mimeType: string, filename: string): 
 
   const data = await resp.json();
   const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  if (!args) throw new Error("IA não retornou dados estruturados");
-  return JSON.parse(args);
+  if (!args) throw new Error("IA não retornou dados estruturados — verifique se o documento é legível");
+  const out: ParsedNote = JSON.parse(args);
+  // Compor endereço a partir das partes se não veio
+  if (!out.destinatario_endereco) {
+    out.destinatario_endereco = [out.destinatario_logradouro, out.destinatario_numero, out.destinatario_bairro]
+      .filter(Boolean).join(", ");
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {
@@ -208,7 +254,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ source_format, parsed }), {
+    const validation = validateParsed(parsed);
+    return new Response(JSON.stringify({ source_format, parsed, ...validation }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
