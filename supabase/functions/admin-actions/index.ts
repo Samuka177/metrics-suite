@@ -53,14 +53,14 @@ Deno.serve(async (req) => {
       });
       if (uErr) { await admin.from('companies').delete().eq('id', comp.id); throw uErr; }
 
-      // Criar profile + role admin manualmente (bypass trigger que exige convite)
-      await admin.from('profiles').insert({
+      // Criar profile + role admin (idempotente — trigger handle_new_user pode já ter criado)
+      await admin.from('profiles').upsert({
         user_id: created.user.id, company_id: comp.id,
         email: admin_email, full_name: admin_name || admin_email,
-      });
-      await admin.from('user_roles').insert({
+      }, { onConflict: 'user_id' });
+      await admin.from('user_roles').upsert({
         user_id: created.user.id, company_id: comp.id, role: 'admin',
-      });
+      }, { onConflict: 'user_id,company_id,role' });
 
       await admin.from('audit_logs').insert({
         company_id: comp.id, user_id: user.id, user_email: user.email,
