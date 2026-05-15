@@ -26,13 +26,32 @@ export function buildRouteLink(paradas: Parada[]): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${destino}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ''}&travelmode=driving`;
 }
 
-/** Monta a mensagem com lista de paradas + link da rota. */
+/** Monta a mensagem padrão de envio de rota (com formatação WhatsApp). */
 export function buildRouteMessage(motorista: Motorista, paradas: Parada[]): string {
   const link = buildRouteLink(paradas);
-  const lista = paradas
-    .map((p, i) => `${i + 1}. ${p.nome} — ${p.endereco}`)
-    .join('\n');
-  return `Olá ${motorista.nome}! Sua rota de hoje (${paradas.length} parada(s)):\n\n${lista}\n\nAbrir rota no mapa:\n${link}`;
+  const now = new Date();
+  const data = now.toLocaleDateString('pt-BR');
+  const horario = motorista.checkinTime
+    || now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return [
+    `Olá, *${motorista.nome}*! 👋`,
+    '',
+    'Sua rota de hoje foi gerada com sucesso. Veja abaixo as informações:',
+    '',
+    `🗓️ *Data:* ${data}`,
+    '',
+    `🕗 *Início previsto:* ${horario}`,
+    '',
+    `📦 *Total de paradas:* ${paradas.length}`,
+    '',
+    '📍 *Acesse sua rota aqui:*',
+    '',
+    link,
+    '',
+    '⚠️ Atenção aos horários de entrega e às orientações de cada ponto.',
+    '',
+    'Bom trabalho e dirija com segurança! 🚚✅',
+  ].join('\n');
 }
 
 /** Abre o WhatsApp com a mensagem da rota. Retorna false se sem telefone. */
