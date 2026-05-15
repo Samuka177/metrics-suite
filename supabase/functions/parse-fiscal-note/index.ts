@@ -93,6 +93,9 @@ function parseXMLNote(xml: string): ParsedNote {
 
   const chaveMatch = xml.match(/Id="NFe(\d{44})"/);
 
+  const lgr = get("xLgr", ender);
+  const nro = get("nro", ender);
+  const bairro = get("xBairro", ender);
   return {
     numero: get("nNF", ide),
     serie: get("serie", ide),
@@ -101,8 +104,10 @@ function parseXMLNote(xml: string): ParsedNote {
     emitente_cnpj: get("CNPJ", emit),
     destinatario_nome: get("xNome", dest),
     destinatario_cnpj: get("CNPJ", dest) || get("CPF", dest),
-    destinatario_endereco: [get("xLgr", ender), get("nro", ender), get("xBairro", ender)]
-      .filter(Boolean).join(", "),
+    destinatario_logradouro: lgr,
+    destinatario_numero: nro,
+    destinatario_bairro: bairro,
+    destinatario_endereco: [lgr, nro, bairro].filter(Boolean).join(", "),
     destinatario_municipio: get("xMun", ender),
     destinatario_uf: get("UF", ender),
     destinatario_cep: get("CEP", ender),
