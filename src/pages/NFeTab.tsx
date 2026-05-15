@@ -251,20 +251,90 @@ export default function NFeTab() {
               <button onClick={() => setNfe(null)}><X className="h-4 w-4 text-muted-foreground" /></button>
             </div>
 
-            <Card className="bg-primary/5 border-primary/20">
+            <Card className={missing.length > 0 ? 'bg-destructive/5 border-destructive/30' : 'bg-primary/5 border-primary/20'}>
               <CardContent className="p-3 space-y-1">
-                <p className="text-sm font-medium text-primary">{nfe.destinatario_endereco}</p>
+                <p className={`text-sm font-medium ${missing.length > 0 ? 'text-destructive' : 'text-primary'}`}>
+                  {nfe.destinatario_endereco || '(sem endereço)'}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {[nfe.destinatario_municipio, nfe.destinatario_uf, nfe.destinatario_cep].filter(Boolean).join(' · ')}
+                  {[nfe.destinatario_municipio, nfe.destinatario_uf, nfe.destinatario_cep].filter(Boolean).join(' · ') || '—'}
                 </p>
               </CardContent>
             </Card>
 
+            {(missing.length > 0 || warnings.length > 0) && (
+              <Card className="border-destructive/40 bg-destructive/5">
+                <CardContent className="p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-medium text-destructive">
+                        A IA não conseguiu ler todos os campos
+                      </p>
+                      {missing.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {missing.map(f => (
+                            <Badge key={f} variant="destructive" className="text-[10px]">
+                              ⚠ {FIELD_LABELS[f] || f}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      {warnings.map((w, i) => (
+                        <p key={i} className="text-xs text-destructive/80">⚠ {w}</p>
+                      ))}
+                      <p className="text-xs text-muted-foreground">
+                        Corrija manualmente abaixo antes de adicionar à rota.
+                      </p>
+                    </div>
+                    {!editing && (
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => setEditing(true)}>
+                        <Edit2 className="h-3 w-3 mr-1" /> Corrigir
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {editing && (
+              <Card>
+                <CardContent className="p-3 space-y-2">
+                  <p className="text-xs font-medium">Editar endereço do destinatário</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="Logradouro *" value={edit.logradouro}
+                      onChange={e => setEdit(s => ({ ...s, logradouro: e.target.value }))}
+                      className={`col-span-2 h-8 text-xs ${missing.includes('logradouro') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="Número *" value={edit.numero}
+                      onChange={e => setEdit(s => ({ ...s, numero: e.target.value }))}
+                      className={`h-8 text-xs ${missing.includes('numero') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="Bairro" value={edit.bairro}
+                      onChange={e => setEdit(s => ({ ...s, bairro: e.target.value }))}
+                      className="h-8 text-xs" />
+                    <Input placeholder="Município *" value={edit.municipio}
+                      onChange={e => setEdit(s => ({ ...s, municipio: e.target.value }))}
+                      className={`h-8 text-xs ${missing.includes('municipio') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="UF *" maxLength={2} value={edit.uf}
+                      onChange={e => setEdit(s => ({ ...s, uf: e.target.value.toUpperCase() }))}
+                      className={`h-8 text-xs ${missing.includes('uf') ? 'border-destructive' : ''}`} />
+                    <Input placeholder="CEP" value={edit.cep}
+                      onChange={e => setEdit(s => ({ ...s, cep: e.target.value }))}
+                      className="col-span-2 h-8 text-xs" />
+                  </div>
+                  <div className="flex justify-end gap-1.5">
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
+                    <Button size="sm" onClick={applyEdit}><Save className="h-3.5 w-3.5 mr-1" /> Aplicar</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex gap-2">
-              <Button onClick={addToRoute} className="flex-1">
-                <Plus className="h-4 w-4 mr-1" /> Adicionar à rota
+              <Button onClick={addToRoute} className="flex-1" disabled={missing.length > 0}>
+                <Plus className="h-4 w-4 mr-1" />
+                {missing.length > 0 ? `Corrija ${missing.length} campo(s)` : 'Adicionar à rota'}
               </Button>
-              <Button variant="outline" onClick={() => setNfe(null)}>Limpar</Button>
+              <Button variant="outline" onClick={() => { setNfe(null); setMissing([]); setWarnings([]); setEditing(false); }}>Limpar</Button>
             </div>
           </CardContent>
         </Card>
