@@ -15,6 +15,9 @@ interface ParsedNote {
   emitente_cnpj?: string;
   destinatario_nome?: string;
   destinatario_cnpj?: string;
+  destinatario_logradouro?: string;
+  destinatario_numero?: string;
+  destinatario_bairro?: string;
   destinatario_endereco?: string;
   destinatario_municipio?: string;
   destinatario_uf?: string;
@@ -24,6 +27,35 @@ interface ParsedNote {
   volume_m3?: number;
   itens?: { nome: string; quantidade?: number; unidade?: string; valor?: number }[];
 }
+
+const UF_VALIDAS = new Set([
+  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB',
+  'PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO',
+]);
+
+function isMissing(v?: string | null): boolean {
+  if (v === undefined || v === null) return true;
+  const t = String(v).trim().toUpperCase();
+  return !t || t === 'SEM' || t === 'N/A' || t === 'NA' || t === 'NULL' || t === '-' || t === '0' || t === 'XXXXX';
+}
+
+function validateParsed(p: ParsedNote): { missing_fields: string[]; warnings: string[] } {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  if (isMissing(p.destinatario_logradouro)) missing.push('logradouro');
+  if (isMissing(p.destinatario_numero)) missing.push('numero');
+  if (isMissing(p.destinatario_municipio)) missing.push('municipio');
+  if (isMissing(p.destinatario_uf)) missing.push('uf');
+  else if (!UF_VALIDAS.has(String(p.destinatario_uf).trim().toUpperCase())) {
+    warnings.push(`UF inválida: "${p.destinatario_uf}"`);
+  }
+  if (!isMissing(p.destinatario_cep)) {
+    const digits = String(p.destinatario_cep).replace(/\D/g, '');
+    if (digits.length !== 8) warnings.push(`CEP inválido: "${p.destinatario_cep}"`);
+  }
+  return { missing_fields: missing, warnings };
+}
+
 
 function parseXMLNote(xml: string): ParsedNote {
   // Remove namespaces para simplificar regex
