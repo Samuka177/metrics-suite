@@ -85,6 +85,8 @@ export default function NFeTab() {
         ? `Campos não lidos pela IA: ${missingFields.map(f => FIELD_LABELS[f] || f).join(', ')}`
         : warns.length > 0 ? warns.join(' · ') : null;
 
+      // Remove campos auxiliares (logradouro/numero/bairro) que não existem na tabela
+      const { destinatario_logradouro, destinatario_numero, destinatario_bairro, ...parsedDb } = parsed;
       const { data: saved } = await supabase.from('fiscal_notes').insert({
         company_id: profile.company_id,
         source_format: data.source_format,
@@ -92,8 +94,8 @@ export default function NFeTab() {
         arquivo_tipo: file.type,
         status,
         error_message: errMsg,
-        ...parsed,
-        raw_extracted: parsed,
+        ...parsedDb,
+        raw_extracted: parsed as any,
       }).select().single();
       await logAction(profile.company_id, 'upload_nota', { type: 'fiscal_note', id: saved?.id }, {
         arquivo: file.name, formato: data.source_format,
