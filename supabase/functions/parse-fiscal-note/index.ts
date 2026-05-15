@@ -210,8 +210,14 @@ async function parseWithAI(base64: string, mimeType: string, filename: string): 
 
   const data = await resp.json();
   const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  if (!args) throw new Error("IA não retornou dados estruturados");
-  return JSON.parse(args);
+  if (!args) throw new Error("IA não retornou dados estruturados — verifique se o documento é legível");
+  const out: ParsedNote = JSON.parse(args);
+  // Compor endereço a partir das partes se não veio
+  if (!out.destinatario_endereco) {
+    out.destinatario_endereco = [out.destinatario_logradouro, out.destinatario_numero, out.destinatario_bairro]
+      .filter(Boolean).join(", ");
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {
