@@ -53,14 +53,14 @@ Deno.serve(async (req) => {
       });
       if (uErr) { await admin.from('companies').delete().eq('id', comp.id); throw uErr; }
 
-      // Criar profile + role admin manualmente (bypass trigger que exige convite)
-      await admin.from('profiles').insert({
+      // Criar profile + role admin (idempotente — trigger handle_new_user pode já ter criado)
+      await admin.from('profiles').upsert({
         user_id: created.user.id, company_id: comp.id,
         email: admin_email, full_name: admin_name || admin_email,
-      });
-      await admin.from('user_roles').insert({
+      }, { onConflict: 'user_id' });
+      await admin.from('user_roles').upsert({
         user_id: created.user.id, company_id: comp.id, role: 'admin',
-      });
+      }, { onConflict: 'user_id,company_id,role' });
 
       await admin.from('audit_logs').insert({
         company_id: comp.id, user_id: user.id, user_email: user.email,
@@ -72,20 +72,32 @@ Deno.serve(async (req) => {
 
     if (action === 'create_user_for_company') {
       const { company_id, email, password, full_name, role } = body;
-      const { data: created, error: uErr } = await admin.auth.admin.createUser({
-        email, password, email_confirm: true,
-        user_metadata: { full_name: full_name || email },
-      });
-      if (uErr) throw uErr;
-      await admin.from('profiles').insert({
-        user_id: created.user.id, company_id, email, full_name: full_name || email,
-      });
-      await admin.from('user_roles').insert({
-        user_id: created.user.id, company_id, role: role || 'member',
-      });
+      if (!company_id || !email || !password) {
+        return new Response(JSON.stringify({ error: 'missing fields' }), { status: 400, headers: corsHeaders });
+      }
+      // Verificar se já existe usuário com este e-mail
+      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      let authUser = list.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (!authUser) {
+        const { data: created, error: uErr } = await admin.auth.admin.createUser({
+          email, password, email_confirm: true,
+          user_metadata: { full_name: full_name || email },
+        });
+        if (uErr) throw uErr;
+        authUser = created.user;
+      } else {
+        // Atualizar senha se usuário já existir
+        await admin.auth.admin.updateUserById(authUser.id, { password, email_confirm: true });
+      }
+      await admin.from('profiles').upsert({
+        user_id: authUser!.id, company_id, email, full_name: full_name || email,
+      }, { onConflict: 'user_id' });
+      await admin.from('user_roles').upsert({
+        user_id: authUser!.id, company_id, role: role || 'member',
+      }, { onConflict: 'user_id,company_id,role' });
       await admin.from('audit_logs').insert({
         company_id, user_id: user.id, user_email: user.email,
-        action: 'create_user', entity_type: 'user', entity_id: created.user.id,
+        action: 'create_user', entity_type: 'user', entity_id: authUser!.id,
         details: { email, role: role || 'member' },
       });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

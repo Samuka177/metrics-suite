@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle2, Edit2, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { needsAddressReview } from '@/utils/addressValidation';
+import { logAction } from '@/utils/audit';
+import { supabase } from '@/integrations/supabase/client';
 import type { Parada } from '@/types/rotafacil';
 
 interface Props {
@@ -45,7 +47,24 @@ export default function AddressReviewDialog({ open, onOpenChange, onAllConfirmed
       form.cep,
     ].filter(Boolean);
     const novo = partes.join(' - ');
+    const original = paradas.find(p => p.id === editingId);
     await updateParada(editingId, { endereco: novo, lat: undefined, lng: undefined });
+    // Auditoria: registra alteração de endereço
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '')
+      .maybeSingle();
+    await logAction(
+      profile?.company_id || null,
+      'update_address',
+      { type: 'parada', id: editingId },
+      {
+        parada_nome: original?.nome,
+        endereco_anterior: original?.endereco || null,
+        endereco_novo: novo,
+      },
+    );
     setConfirmed(prev => new Set(prev).add(editingId));
     setEditingId(null);
     toast.success('Endereço atualizado');
