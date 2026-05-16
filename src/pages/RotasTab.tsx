@@ -381,6 +381,7 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
           </div>
         </div>
       </CardContent>
+      <EditParadaDialog parada={parada} open={editing} onOpenChange={setEditing} />
     </Card>
   );
 });
