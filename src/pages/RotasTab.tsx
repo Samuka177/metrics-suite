@@ -471,9 +471,11 @@ export default function RotasTab() {
 
       {/* Map */}
       {showMap && paradas.length > 0 && (
-        <Suspense fallback={<div className="h-[350px] rounded-xl bg-muted animate-pulse" />}>
-          <RouteMap paradas={paradas} motoristas={motoristas} onReorder={reorderParadas} highlightIndex={executionMode ? currentStopIndex : undefined} />
-        </Suspense>
+        <ResizableMapWrapper>
+          <Suspense fallback={<div className="h-full w-full rounded-xl bg-muted animate-pulse" />}>
+            <RouteMap paradas={paradas} motoristas={motoristas} onReorder={reorderParadas} highlightIndex={executionMode ? currentStopIndex : undefined} />
+          </Suspense>
+        </ResizableMapWrapper>
       )}
 
       {/* Action buttons */}
