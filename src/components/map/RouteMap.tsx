@@ -109,7 +109,12 @@ export default function RouteMap({ paradas, motoristas = [], onReorder, highligh
 
     requestAnimationFrame(() => map.invalidateSize());
 
+    // Observa redimensionamento do container e ajusta o mapa
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(mapElementRef.current);
+
     return () => {
+      ro.disconnect();
       layerGroupRef.current?.clearLayers();
       layerGroupRef.current?.remove();
       map.remove();
