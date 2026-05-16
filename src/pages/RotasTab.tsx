@@ -24,6 +24,7 @@ import AddressReviewDialog from '@/components/routes/AddressReviewDialog';
 import { needsAddressReview } from '@/utils/addressValidation';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
+import ResizableMapWrapper from '@/components/map/ResizableMapWrapper';
 
 // ── Metric Card ──
 const MetricCard = memo(({ label, value, color }: { label: string; value: string | number; color: string }) => (
