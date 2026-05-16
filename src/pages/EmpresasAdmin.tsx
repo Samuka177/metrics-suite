@@ -43,7 +43,7 @@ export default function EmpresasAdmin() {
   const [uEmail, setUEmail] = useState('');
   const [uName, setUName] = useState('');
   const [uPass, setUPass] = useState('');
-  const [uRole, setURole] = useState<'admin' | 'member'>('member');
+  const [uRole, setURole] = useState<'admin' | 'member' | 'motorista' | 'ajudante'>('member');
 
   const load = async () => {
     setLoading(true);
@@ -200,10 +200,12 @@ export default function EmpresasAdmin() {
             <div><label className="text-xs">Nome</label><Input value={uName} onChange={e => setUName(e.target.value)} /></div>
             <div><label className="text-xs">Senha</label><Input type="password" value={uPass} onChange={e => setUPass(e.target.value)} /></div>
             <div>
-              <label className="text-xs">Papel</label>
+              <label className="text-xs">Perfil</label>
               <select value={uRole} onChange={e => setURole(e.target.value as any)} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
-                <option value="member">Membro</option>
                 <option value="admin">Administrador</option>
+                <option value="member">Membro</option>
+                <option value="motorista">Motorista</option>
+                <option value="ajudante">Ajudante</option>
               </select>
             </div>
           </div>

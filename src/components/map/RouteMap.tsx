@@ -109,7 +109,12 @@ export default function RouteMap({ paradas, motoristas = [], onReorder, highligh
 
     requestAnimationFrame(() => map.invalidateSize());
 
+    // Observa redimensionamento do container e ajusta o mapa
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(mapElementRef.current);
+
     return () => {
+      ro.disconnect();
       layerGroupRef.current?.clearLayers();
       layerGroupRef.current?.remove();
       map.remove();
@@ -219,7 +224,7 @@ export default function RouteMap({ paradas, motoristas = [], onReorder, highligh
   }, [paradas, motoristas, onReorder, highlightIndex, getPos]);
 
   return (
-    <div className="rounded-xl overflow-hidden border border-border" style={{ height: 350 }}>
+    <div className="rounded-xl overflow-hidden border border-border h-full w-full">
       <div ref={mapElementRef} className="h-full w-full" />
     </div>
   );

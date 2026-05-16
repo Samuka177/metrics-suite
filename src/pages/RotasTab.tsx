@@ -24,6 +24,7 @@ import AddressReviewDialog from '@/components/routes/AddressReviewDialog';
 import { needsAddressReview } from '@/utils/addressValidation';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
+import ResizableMapWrapper from '@/components/map/ResizableMapWrapper';
 
 // ── Metric Card ──
 const MetricCard = memo(({ label, value, color }: { label: string; value: string | number; color: string }) => (
@@ -181,6 +182,75 @@ function AddParadaSheet() {
   );
 }
 
+// ── Edit Parada Dialog ──
+function EditParadaDialog({ parada, open, onOpenChange }: { parada: Parada; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { updateParada } = useApp();
+  const [form, setForm] = useState({
+    nome: parada.nome, endereco: parada.endereco, horario: parada.horario || '',
+    horarioMin: parada.horarioMin || '', horarioMax: parada.horarioMax || '',
+    peso: parada.peso?.toString() || '', volume: parada.volume?.toString() || '',
+    telefone: parada.telefone || '', observacoes: parada.observacoes || '',
+  });
+
+  // Reset form when opening
+  useState(() => {});
+  const handleSave = async () => {
+    if (!form.nome || !form.endereco) { toast.error('Nome e endereço são obrigatórios'); return; }
+    const enderecoChanged = form.endereco !== parada.endereco;
+    await updateParada(parada.id, {
+      nome: form.nome,
+      endereco: form.endereco,
+      horario: form.horario || undefined,
+      horarioMin: form.horarioMin || undefined,
+      horarioMax: form.horarioMax || undefined,
+      peso: form.peso ? Number(form.peso) : undefined,
+      volume: form.volume ? Number(form.volume) : undefined,
+      telefone: form.telefone || undefined,
+      observacoes: form.observacoes || undefined,
+      // Se mudou o endereço, limpa coordenadas para regeocodificar
+      ...(enderecoChanged ? { lat: undefined, lng: undefined } : {}),
+    });
+    toast.success('Parada atualizada!');
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Editar parada</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><label className="text-xs font-medium">Nome *</label>
+            <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} /></div>
+          <div><label className="text-xs font-medium">Endereço *</label>
+            <Input value={form.endereco} onChange={e => setForm(f => ({ ...f, endereco: e.target.value }))} /></div>
+          <div><label className="text-xs font-medium">Telefone</label>
+            <Input value={form.telefone} onChange={e => setForm(f => ({ ...f, telefone: e.target.value }))} placeholder="(11) 99999-9999" /></div>
+          <div className="grid grid-cols-3 gap-2">
+            <div><label className="text-xs">Horário</label>
+              <Input type="time" value={form.horario} onChange={e => setForm(f => ({ ...f, horario: e.target.value }))} /></div>
+            <div><label className="text-xs">Janela início</label>
+              <Input type="time" value={form.horarioMin} onChange={e => setForm(f => ({ ...f, horarioMin: e.target.value }))} /></div>
+            <div><label className="text-xs">Janela fim</label>
+              <Input type="time" value={form.horarioMax} onChange={e => setForm(f => ({ ...f, horarioMax: e.target.value }))} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className="text-xs">Peso (kg)</label>
+              <Input type="number" value={form.peso} onChange={e => setForm(f => ({ ...f, peso: e.target.value }))} /></div>
+            <div><label className="text-xs">Volume (m³)</label>
+              <Input type="number" step="0.01" value={form.volume} onChange={e => setForm(f => ({ ...f, volume: e.target.value }))} /></div>
+          </div>
+          <div><label className="text-xs">Observações</label>
+            <Textarea rows={2} value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSave}>Salvar alterações</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Stop Card (rich) ──
 const StopCard = memo(({ parada, index, isActive, motoristas }: {
   parada: Parada; index: number; isActive: boolean;
@@ -312,6 +382,7 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
           </div>
         </div>
       </CardContent>
+      <EditParadaDialog parada={parada} open={editing} onOpenChange={setEditing} />
     </Card>
   );
 });
@@ -400,9 +471,11 @@ export default function RotasTab() {
 
       {/* Map */}
       {showMap && paradas.length > 0 && (
-        <Suspense fallback={<div className="h-[350px] rounded-xl bg-muted animate-pulse" />}>
-          <RouteMap paradas={paradas} motoristas={motoristas} onReorder={reorderParadas} highlightIndex={executionMode ? currentStopIndex : undefined} />
-        </Suspense>
+        <ResizableMapWrapper>
+          <Suspense fallback={<div className="h-full w-full rounded-xl bg-muted animate-pulse" />}>
+            <RouteMap paradas={paradas} motoristas={motoristas} onReorder={reorderParadas} highlightIndex={executionMode ? currentStopIndex : undefined} />
+          </Suspense>
+        </ResizableMapWrapper>
       )}
 
       {/* Action buttons */}

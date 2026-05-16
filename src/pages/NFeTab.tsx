@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { FileText, Upload, Plus, X, AlertCircle, AlertTriangle, Loader2, Sparkles, Edit2, Save } from 'lucide-react';
+import {
+  FileText, Upload, Plus, X, AlertCircle, AlertTriangle, Loader2, Sparkles, Edit2, Save,
+  CheckCircle2, Copy as CopyIcon, Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { logAction } from '@/utils/audit';
@@ -22,11 +25,26 @@ interface ParsedNote {
   itens?: { nome: string; quantidade?: number; unidade?: string; valor?: number }[];
 }
 
+type ItemStatus = 'queued' | 'processing' | 'ok' | 'incomplete' | 'duplicate' | 'error';
+
+interface NoteItem {
+  id: string;
+  filename: string;
+  status: ItemStatus;
+  parsed?: ParsedNote;
+  missing: string[];
+  warnings: string[];
+  sourceFormat?: string;
+  error?: string;
+  fiscalNoteId?: string;
+  duplicateOf?: string; // descrição
+  includeAnyway?: boolean; // se usuário escolheu importar duplicata
+  editing?: boolean;
+  edit: { logradouro: string; numero: string; bairro: string; municipio: string; uf: string; cep: string };
+}
+
 const FIELD_LABELS: Record<string, string> = {
-  logradouro: 'Logradouro (rua/avenida)',
-  numero: 'Número',
-  municipio: 'Município',
-  uf: 'UF',
+  logradouro: 'Logradouro', numero: 'Número', municipio: 'Município', uf: 'UF',
 };
 
 function fileToBase64(file: File): Promise<string> {
@@ -38,315 +56,374 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function isDuplicate(p: ParsedNote, others: ParsedNote[]): string | null {
+  for (const o of others) {
+    if (p.chave && o.chave && p.chave === o.chave) return `Chave NF-e ${p.chave}`;
+    if (p.numero && p.emitente_cnpj && o.numero === p.numero && o.emitente_cnpj === p.emitente_cnpj && (o.serie || '') === (p.serie || '')) {
+      return `NF ${p.numero}/${p.serie || '—'} do mesmo emitente`;
+    }
+  }
+  return null;
+}
+
 export default function NFeTab() {
   const { addParada } = useApp();
   const { profile } = useAuth();
-  const [nfe, setNfe] = useState<ParsedNote | null>(null);
-  const [missing, setMissing] = useState<string[]>([]);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [editing, setEditing] = useState(false);
-  const [edit, setEdit] = useState({ logradouro: '', numero: '', bairro: '', municipio: '', uf: '', cep: '' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState('');
-  const [sourceFormat, setSourceFormat] = useState<string>('');
+  const [items, setItems] = useState<NoteItem[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [processed, setProcessed] = useState(0);
+  const [total, setTotal] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const processFile = async (file: File) => {
-    if (!profile?.company_id) return;
-    setError(''); setNfe(null); setMissing([]); setWarnings([]); setEditing(false); setLoading(true);
-    setProgress(10); setProgressLabel('Lendo arquivo...');
+  const processOne = async (file: File, dbExisting: ParsedNote[], batchSoFar: ParsedNote[]): Promise<NoteItem> => {
+    const id = crypto.randomUUID();
+    const baseItem: NoteItem = {
+      id, filename: file.name, status: 'processing', missing: [], warnings: [],
+      edit: { logradouro: '', numero: '', bairro: '', municipio: '', uf: '', cep: '' },
+    };
+    setItems(prev => [...prev, baseItem]);
+
     try {
       const base64 = await fileToBase64(file);
-      setProgress(40); setProgressLabel('Enviando para a IA...');
       const { data, error: fnErr } = await supabase.functions.invoke('parse-fiscal-note', {
         body: { filename: file.name, mimeType: file.type, base64 },
       });
       if (fnErr) throw new Error(fnErr.message);
       if (data?.error) throw new Error(data.error);
-      setProgress(80); setProgressLabel('Salvando nota...');
+
       const parsed: ParsedNote = data.parsed;
       const missingFields: string[] = data.missing_fields || [];
       const warns: string[] = data.warnings || [];
-      setNfe(parsed);
-      setMissing(missingFields);
-      setWarnings(warns);
-      setSourceFormat(data.source_format);
-      setEdit({
-        logradouro: parsed.destinatario_logradouro || '',
-        numero: parsed.destinatario_numero || '',
-        bairro: parsed.destinatario_bairro || '',
-        municipio: parsed.destinatario_municipio || '',
-        uf: parsed.destinatario_uf || '',
-        cep: parsed.destinatario_cep || '',
-      });
 
-      const status = missingFields.length > 0 ? 'incompleto' : 'parsed';
+      const dup = isDuplicate(parsed, [...dbExisting, ...batchSoFar]);
+
+      const status: ItemStatus = dup ? 'duplicate' : missingFields.length > 0 ? 'incomplete' : 'ok';
       const errMsg = missingFields.length > 0
-        ? `Campos não lidos pela IA: ${missingFields.map(f => FIELD_LABELS[f] || f).join(', ')}`
+        ? `Campos não lidos: ${missingFields.map(f => FIELD_LABELS[f] || f).join(', ')}`
         : warns.length > 0 ? warns.join(' · ') : null;
 
-      // Remove campos auxiliares (logradouro/numero/bairro) que não existem na tabela
+      // Salva nota no banco
       const { destinatario_logradouro, destinatario_numero, destinatario_bairro, ...parsedDb } = parsed;
       const { data: saved } = await supabase.from('fiscal_notes').insert({
-        company_id: profile.company_id,
+        company_id: profile!.company_id,
         source_format: data.source_format,
         arquivo_nome: file.name,
         arquivo_tipo: file.type,
-        status,
-        error_message: errMsg,
+        status: dup ? 'duplicada' : status === 'ok' ? 'parsed' : 'incompleto',
+        error_message: dup ? `Duplicada: ${dup}` : errMsg,
         ...parsedDb,
         raw_extracted: parsed as any,
       }).select().single();
-      await logAction(profile.company_id, 'upload_nota', { type: 'fiscal_note', id: saved?.id }, {
+
+      await logAction(profile!.company_id, 'upload_nota', { type: 'fiscal_note', id: saved?.id }, {
         arquivo: file.name, formato: data.source_format,
-        missing_fields: missingFields, warnings: warns,
+        missing_fields: missingFields, warnings: warns, duplicate: dup,
       });
-      setProgress(100);
-      if (missingFields.length > 0) {
-        toast.warning(`Nota lida, mas ${missingFields.length} campo(s) faltando. Corrija manualmente.`);
-        setEditing(true);
-      } else if (warns.length > 0) {
-        toast.warning('Nota lida com avisos. Verifique antes de roteirizar.');
-      } else {
-        toast.success('Nota lida com sucesso!');
-      }
+
+      const next: NoteItem = {
+        ...baseItem,
+        status,
+        parsed,
+        missing: missingFields,
+        warnings: warns,
+        sourceFormat: data.source_format,
+        fiscalNoteId: saved?.id,
+        duplicateOf: dup || undefined,
+        edit: {
+          logradouro: parsed.destinatario_logradouro || '',
+          numero: parsed.destinatario_numero || '',
+          bairro: parsed.destinatario_bairro || '',
+          municipio: parsed.destinatario_municipio || '',
+          uf: parsed.destinatario_uf || '',
+          cep: parsed.destinatario_cep || '',
+        },
+        editing: missingFields.length > 0,
+      };
+      setItems(prev => prev.map(i => i.id === id ? next : i));
+      return next;
     } catch (err: any) {
-      const msg = err.message || 'Erro ao processar arquivo';
-      setError(msg);
-      // registrar nota em status erro
-      if (profile?.company_id) {
-        const { data: saved } = await supabase.from('fiscal_notes').insert({
-          company_id: profile.company_id,
-          source_format: 'unknown',
-          arquivo_nome: file.name, arquivo_tipo: file.type,
-          status: 'erro', error_message: msg,
-        }).select().single();
-        await logAction(profile.company_id, 'erro_parse', { type: 'fiscal_note', id: saved?.id }, {
-          arquivo: file.name, erro: msg,
-        });
-      }
-    } finally {
-      setLoading(false);
-      setTimeout(() => { setProgress(0); setProgressLabel(''); }, 800);
-      if (fileRef.current) fileRef.current.value = '';
+      const errored: NoteItem = { ...baseItem, status: 'error', error: err.message || 'Erro' };
+      setItems(prev => prev.map(i => i.id === id ? errored : i));
+      return errored;
     }
   };
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) await processFile(file);
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!profile?.company_id) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setProcessing(true);
+    setTotal(files.length);
+    setProcessed(0);
+
+    // Busca notas existentes para deduplicação
+    const { data: existing } = await supabase
+      .from('fiscal_notes')
+      .select('chave, numero, serie, emitente_cnpj')
+      .eq('company_id', profile.company_id)
+      .gte('created_at', new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString());
+    const dbExisting = (existing || []) as ParsedNote[];
+
+    const batch: ParsedNote[] = [];
+    for (const f of files) {
+      const result = await processOne(f, dbExisting, batch);
+      if (result.parsed) batch.push(result.parsed);
+      setProcessed(c => c + 1);
+    }
+
+    setProcessing(false);
+    if (fileRef.current) fileRef.current.value = '';
+    toast.success(`${files.length} arquivo(s) processado(s)`);
   };
 
-  const applyEdit = () => {
-    if (!nfe) return;
-    const enderecoTxt = [
-      edit.logradouro && edit.numero ? `${edit.logradouro}, ${edit.numero}` : edit.logradouro,
-      edit.bairro,
-    ].filter(Boolean).join(', ');
-    const updated: ParsedNote = {
-      ...nfe,
-      destinatario_logradouro: edit.logradouro || undefined,
-      destinatario_numero: edit.numero || undefined,
-      destinatario_bairro: edit.bairro || undefined,
-      destinatario_endereco: enderecoTxt || nfe.destinatario_endereco,
-      destinatario_municipio: edit.municipio || undefined,
-      destinatario_uf: edit.uf.toUpperCase() || undefined,
-      destinatario_cep: edit.cep || undefined,
-    };
-    setNfe(updated);
-    // Recalcula missing
-    const stillMissing: string[] = [];
-    if (!edit.logradouro.trim()) stillMissing.push('logradouro');
-    if (!edit.numero.trim()) stillMissing.push('numero');
-    if (!edit.municipio.trim()) stillMissing.push('municipio');
-    if (!edit.uf.trim()) stillMissing.push('uf');
-    setMissing(stillMissing);
-    if (stillMissing.length === 0) {
-      setEditing(false);
-      toast.success('Endereço corrigido');
-    } else {
-      toast.error(`Ainda faltam: ${stillMissing.map(f => FIELD_LABELS[f]).join(', ')}`);
-    }
+  const applyEdit = (id: string) => {
+    setItems(prev => prev.map(it => {
+      if (it.id !== id || !it.parsed) return it;
+      const stillMissing: string[] = [];
+      if (!it.edit.logradouro.trim()) stillMissing.push('logradouro');
+      if (!it.edit.numero.trim()) stillMissing.push('numero');
+      if (!it.edit.municipio.trim()) stillMissing.push('municipio');
+      if (!it.edit.uf.trim()) stillMissing.push('uf');
+      const enderecoTxt = [
+        it.edit.logradouro && it.edit.numero ? `${it.edit.logradouro}, ${it.edit.numero}` : it.edit.logradouro,
+        it.edit.bairro,
+      ].filter(Boolean).join(', ');
+      const updated: ParsedNote = {
+        ...it.parsed,
+        destinatario_logradouro: it.edit.logradouro || undefined,
+        destinatario_numero: it.edit.numero || undefined,
+        destinatario_bairro: it.edit.bairro || undefined,
+        destinatario_endereco: enderecoTxt || it.parsed.destinatario_endereco,
+        destinatario_municipio: it.edit.municipio || undefined,
+        destinatario_uf: it.edit.uf.toUpperCase() || undefined,
+        destinatario_cep: it.edit.cep || undefined,
+      };
+      return {
+        ...it,
+        parsed: updated,
+        missing: stillMissing,
+        status: stillMissing.length === 0 ? (it.duplicateOf && !it.includeAnyway ? 'duplicate' : 'ok') : 'incomplete',
+        editing: stillMissing.length > 0,
+      };
+    }));
+    toast.success('Endereço atualizado');
   };
 
-  const addToRoute = async () => {
-    if (!nfe) return;
-    if (missing.length > 0) {
-      toast.error(`Corrija os campos faltantes antes de adicionar à rota: ${missing.map(f => FIELD_LABELS[f]).join(', ')}`);
-      setEditing(true);
-      return;
-    }
-    const enderecoCompleto = [
-      nfe.destinatario_endereco, nfe.destinatario_municipio,
-      nfe.destinatario_uf, nfe.destinatario_cep,
-    ].filter(Boolean).join(', ');
+  const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
 
-    await addParada({
-      nome: nfe.destinatario_nome || `NF ${nfe.numero || ''}`,
-      endereco: enderecoCompleto,
-      tipo: 'Delivery',
-      peso: nfe.peso_kg, volume: nfe.volume_m3,
-      produtos: (nfe.itens || []).map(p => ({
-        nome: p.nome, quantidade: String(p.quantidade ?? ''), unidade: p.unidade || '',
-      })),
-    });
-    toast.success('Adicionada à rota!');
-    setNfe(null); setMissing([]); setWarnings([]);
+  const toggleIncludeDup = (id: string) => {
+    setItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const include = !it.includeAnyway;
+      return { ...it, includeAnyway: include, status: include && it.missing.length === 0 ? 'ok' : it.status };
+    }));
+  };
+
+  // Itens que podem ir para rota
+  const importableCount = items.filter(it =>
+    (it.status === 'ok' || (it.status === 'duplicate' && it.includeAnyway)) && it.missing.length === 0
+  ).length;
+  const blockingCount = items.filter(it => it.status === 'incomplete' || it.status === 'error').length;
+  const duplicateCount = items.filter(it => it.status === 'duplicate' && !it.includeAnyway).length;
+
+  const addAllToRoute = async () => {
+    const list = items.filter(it =>
+      (it.status === 'ok' || (it.status === 'duplicate' && it.includeAnyway)) && it.missing.length === 0 && it.parsed
+    );
+    for (const it of list) {
+      const p = it.parsed!;
+      const enderecoCompleto = [
+        p.destinatario_endereco, p.destinatario_municipio,
+        p.destinatario_uf, p.destinatario_cep,
+      ].filter(Boolean).join(', ');
+      await addParada({
+        nome: p.destinatario_nome || `NF ${p.numero || ''}`,
+        endereco: enderecoCompleto,
+        tipo: 'Delivery',
+        peso: p.peso_kg, volume: p.volume_m3,
+        produtos: (p.itens || []).map(pr => ({
+          nome: pr.nome, quantidade: String(pr.quantidade ?? ''), unidade: pr.unidade || '',
+        })),
+      });
+    }
+    toast.success(`${list.length} parada(s) adicionada(s) à rota`);
+    setItems([]);
+  };
+
+  const statusBadge = (it: NoteItem) => {
+    if (it.status === 'processing') return <Badge variant="secondary" className="text-[10px]"><Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />Processando</Badge>;
+    if (it.status === 'error') return <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-2.5 w-2.5 mr-0.5" />Erro</Badge>;
+    if (it.status === 'duplicate') return <Badge className="text-[10px] bg-warning text-warning-foreground"><CopyIcon className="h-2.5 w-2.5 mr-0.5" />Duplicada</Badge>;
+    if (it.status === 'incomplete') return <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="h-2.5 w-2.5 mr-0.5" />Incompleta</Badge>;
+    return <Badge className="text-[10px] bg-success text-success-foreground"><CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />OK</Badge>;
   };
 
   return (
     <div className="space-y-4 fade-in pb-4">
-      <input ref={fileRef} type="file"
+      <input ref={fileRef} type="file" multiple
         accept=".xml,.pdf,.csv,.txt,image/*"
-        onChange={handleFile} className="hidden" id="nfe-upload" />
+        onChange={handleFiles} className="hidden" id="nfe-upload" />
       <label htmlFor="nfe-upload"
-        className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
-        {loading ? (
+        className={`flex flex-col items-center justify-center p-8 border-2 border-dashed border-border rounded-xl transition-colors ${processing ? 'opacity-60 pointer-events-none' : 'cursor-pointer hover:border-primary/50 hover:bg-muted/30'}`}>
+        {processing ? (
           <>
             <Loader2 className="h-10 w-10 text-primary mb-3 animate-spin" />
-            <p className="font-medium">{progressLabel || 'Processando com IA...'}</p>
-            <Progress value={progress} className="w-full mt-3 max-w-xs" />
+            <p className="font-medium">Processando {processed} de {total}…</p>
+            <Progress value={(processed / Math.max(total, 1)) * 100} className="w-full mt-3 max-w-xs" />
           </>
         ) : (
           <>
             <Upload className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="font-medium text-foreground">Importar nota fiscal</p>
+            <p className="font-medium text-foreground">Importar várias notas</p>
             <p className="text-xs text-muted-foreground mt-1 text-center">
-              XML (NF-e), PDF (DANFE), CSV, foto da nota — IA extrai endereço, itens, peso
+              Selecione vários arquivos (XML, PDF, CSV, imagem). A IA processa um a um e detecta duplicatas.
             </p>
           </>
         )}
       </label>
 
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="p-4 flex items-start gap-2 text-destructive">
-            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Falha no parsing</p>
-              <p className="text-xs">{error}</p>
-              <p className="text-xs mt-2 text-muted-foreground">
-                Veja em <strong>Notas Fiscais</strong> para reprocessar.
-              </p>
+      {/* Resumo + ação global */}
+      {items.length > 0 && (
+        <Card>
+          <CardContent className="p-3 flex items-center justify-between gap-2 flex-wrap">
+            <div className="text-xs text-muted-foreground flex gap-3 flex-wrap">
+              <span><strong className="text-foreground">{items.length}</strong> arquivo(s)</span>
+              <span className="text-success"><strong>{importableCount}</strong> ok</span>
+              {blockingCount > 0 && <span className="text-destructive"><strong>{blockingCount}</strong> com erro/incompleta</span>}
+              {duplicateCount > 0 && <span className="text-warning"><strong>{duplicateCount}</strong> duplicada(s)</span>}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {nfe && (
-        <Card className="fade-in">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold text-foreground">{nfe.destinatario_nome}</p>
-                <p className="text-xs text-muted-foreground">
-                  NF {nfe.numero || '—'} · {nfe.destinatario_cnpj || '—'}
-                </p>
-                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                  <Sparkles className="h-3 w-3" /> Extraído via {sourceFormat?.toUpperCase()}
-                </p>
-              </div>
-              <button onClick={() => setNfe(null)}><X className="h-4 w-4 text-muted-foreground" /></button>
-            </div>
-
-            <Card className={missing.length > 0 ? 'bg-destructive/5 border-destructive/30' : 'bg-primary/5 border-primary/20'}>
-              <CardContent className="p-3 space-y-1">
-                <p className={`text-sm font-medium ${missing.length > 0 ? 'text-destructive' : 'text-primary'}`}>
-                  {nfe.destinatario_endereco || '(sem endereço)'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {[nfe.destinatario_municipio, nfe.destinatario_uf, nfe.destinatario_cep].filter(Boolean).join(' · ') || '—'}
-                </p>
-              </CardContent>
-            </Card>
-
-            {(missing.length > 0 || warnings.length > 0) && (
-              <Card className="border-destructive/40 bg-destructive/5">
-                <CardContent className="p-3 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium text-destructive">
-                        A IA não conseguiu ler todos os campos
-                      </p>
-                      {missing.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {missing.map(f => (
-                            <Badge key={f} variant="destructive" className="text-[10px]">
-                              ⚠ {FIELD_LABELS[f] || f}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      {warnings.map((w, i) => (
-                        <p key={i} className="text-xs text-destructive/80">⚠ {w}</p>
-                      ))}
-                      <p className="text-xs text-muted-foreground">
-                        Corrija manualmente abaixo antes de adicionar à rota.
-                      </p>
-                    </div>
-                    {!editing && (
-                      <Button size="sm" variant="outline" className="h-7" onClick={() => setEditing(true)}>
-                        <Edit2 className="h-3 w-3 mr-1" /> Corrigir
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {editing && (
-              <Card>
-                <CardContent className="p-3 space-y-2">
-                  <p className="text-xs font-medium">Editar endereço do destinatário</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="Logradouro *" value={edit.logradouro}
-                      onChange={e => setEdit(s => ({ ...s, logradouro: e.target.value }))}
-                      className={`col-span-2 h-8 text-xs ${missing.includes('logradouro') ? 'border-destructive' : ''}`} />
-                    <Input placeholder="Número *" value={edit.numero}
-                      onChange={e => setEdit(s => ({ ...s, numero: e.target.value }))}
-                      className={`h-8 text-xs ${missing.includes('numero') ? 'border-destructive' : ''}`} />
-                    <Input placeholder="Bairro" value={edit.bairro}
-                      onChange={e => setEdit(s => ({ ...s, bairro: e.target.value }))}
-                      className="h-8 text-xs" />
-                    <Input placeholder="Município *" value={edit.municipio}
-                      onChange={e => setEdit(s => ({ ...s, municipio: e.target.value }))}
-                      className={`h-8 text-xs ${missing.includes('municipio') ? 'border-destructive' : ''}`} />
-                    <Input placeholder="UF *" maxLength={2} value={edit.uf}
-                      onChange={e => setEdit(s => ({ ...s, uf: e.target.value.toUpperCase() }))}
-                      className={`h-8 text-xs ${missing.includes('uf') ? 'border-destructive' : ''}`} />
-                    <Input placeholder="CEP" value={edit.cep}
-                      onChange={e => setEdit(s => ({ ...s, cep: e.target.value }))}
-                      className="col-span-2 h-8 text-xs" />
-                  </div>
-                  <div className="flex justify-end gap-1.5">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
-                    <Button size="sm" onClick={applyEdit}><Save className="h-3.5 w-3.5 mr-1" /> Aplicar</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             <div className="flex gap-2">
-              <Button onClick={addToRoute} className="flex-1" disabled={missing.length > 0}>
-                <Plus className="h-4 w-4 mr-1" />
-                {missing.length > 0 ? `Corrija ${missing.length} campo(s)` : 'Adicionar à rota'}
+              <Button variant="outline" size="sm" onClick={() => setItems([])} disabled={processing}>
+                Limpar lista
               </Button>
-              <Button variant="outline" onClick={() => { setNfe(null); setMissing([]); setWarnings([]); setEditing(false); }}>Limpar</Button>
+              <Button
+                size="sm"
+                onClick={addAllToRoute}
+                disabled={processing || importableCount === 0 || blockingCount > 0}
+                title={blockingCount > 0 ? 'Corrija ou remova as notas com erro/incompletas' : ''}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                {processing ? 'Aguarde processamento…' :
+                  blockingCount > 0 ? `Corrija ${blockingCount} antes` :
+                  `Adicionar ${importableCount} à rota`}
+              </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {!nfe && !error && !loading && (
+      {/* Lista */}
+      <div className="space-y-2">
+        {items.map(it => (
+          <Card key={it.id} className={
+            it.status === 'error' || it.status === 'incomplete' ? 'border-destructive/40' :
+            it.status === 'duplicate' ? 'border-warning/40' :
+            it.status === 'ok' ? 'border-success/30' : ''
+          }>
+            <CardContent className="p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {statusBadge(it)}
+                    <p className="text-sm font-medium truncate">{it.filename}</p>
+                  </div>
+                  {it.parsed && (
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      <strong>{it.parsed.destinatario_nome || '(sem destinatário)'}</strong>
+                      {' · '}NF {it.parsed.numero || '—'}
+                    </p>
+                  )}
+                  {it.error && <p className="text-xs text-destructive mt-1">{it.error}</p>}
+                  {it.duplicateOf && (
+                    <p className="text-xs text-warning mt-1">
+                      Possível duplicata: {it.duplicateOf}
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => removeItem(it.id)} disabled={processing} title="Remover">
+                  <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+
+              {it.parsed && (
+                <div className="text-xs bg-muted/40 rounded p-2 space-y-0.5">
+                  <p className="font-medium">{it.parsed.destinatario_endereco || '(sem endereço)'}</p>
+                  <p className="text-muted-foreground">
+                    {[it.parsed.destinatario_municipio, it.parsed.destinatario_uf, it.parsed.destinatario_cep].filter(Boolean).join(' · ') || '—'}
+                  </p>
+                </div>
+              )}
+
+              {it.missing.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {it.missing.map(f => (
+                    <Badge key={f} variant="destructive" className="text-[10px]">⚠ {FIELD_LABELS[f]}</Badge>
+                  ))}
+                </div>
+              )}
+              {it.warnings.map((w, i) => (
+                <p key={i} className="text-[10px] text-destructive/80">⚠ {w}</p>
+              ))}
+
+              {it.editing && it.parsed && (
+                <div className="grid grid-cols-2 gap-1.5 pt-1 border-t">
+                  <Input placeholder="Logradouro *" value={it.edit.logradouro}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, edit: { ...x.edit, logradouro: e.target.value } } : x))}
+                    className={`col-span-2 h-8 text-xs ${it.missing.includes('logradouro') ? 'border-destructive' : ''}`} />
+                  <Input placeholder="Número *" value={it.edit.numero}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, edit: { ...x.edit, numero: e.target.value } } : x))}
+                    className={`h-8 text-xs ${it.missing.includes('numero') ? 'border-destructive' : ''}`} />
+                  <Input placeholder="Bairro" value={it.edit.bairro}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, edit: { ...x.edit, bairro: e.target.value } } : x))}
+                    className="h-8 text-xs" />
+                  <Input placeholder="Município *" value={it.edit.municipio}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, edit: { ...x.edit, municipio: e.target.value } } : x))}
+                    className={`h-8 text-xs ${it.missing.includes('municipio') ? 'border-destructive' : ''}`} />
+                  <Input placeholder="UF *" maxLength={2} value={it.edit.uf}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, edit: { ...x.edit, uf: e.target.value.toUpperCase() } } : x))}
+                    className={`h-8 text-xs ${it.missing.includes('uf') ? 'border-destructive' : ''}`} />
+                  <Input placeholder="CEP" value={it.edit.cep}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, edit: { ...x.edit, cep: e.target.value } } : x))}
+                    className="col-span-2 h-8 text-xs" />
+                  <div className="col-span-2 flex justify-end gap-1.5">
+                    <Button size="sm" variant="ghost" onClick={() => setItems(prev => prev.map(x => x.id === it.id ? { ...x, editing: false } : x))}>Cancelar</Button>
+                    <Button size="sm" onClick={() => applyEdit(it.id)}><Save className="h-3 w-3 mr-1" /> Aplicar</Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-1 pt-1">
+                {it.parsed && !it.editing && it.status !== 'processing' && (
+                  <Button size="sm" variant="outline" className="h-7 text-[11px]"
+                    onClick={() => setItems(prev => prev.map(x => x.id === it.id ? { ...x, editing: true } : x))}>
+                    <Edit2 className="h-3 w-3 mr-1" /> Editar endereço
+                  </Button>
+                )}
+                {it.status === 'duplicate' && (
+                  <Button size="sm" variant={it.includeAnyway ? 'default' : 'outline'} className="h-7 text-[11px]"
+                    onClick={() => toggleIncludeDup(it.id)}>
+                    {it.includeAnyway ? '✓ Importar mesmo assim' : 'Importar mesmo assim'}
+                  </Button>
+                )}
+                {it.parsed && (
+                  <span className="text-[10px] text-muted-foreground self-center ml-auto flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> {it.sourceFormat?.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {items.length === 0 && !processing && (
         <Card>
           <CardContent className="p-8 text-center">
             <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
             <p className="font-medium text-foreground">Nenhuma nota importada</p>
             <p className="text-sm text-muted-foreground mt-1">
-              A IA lê o documento, extrai endereço/itens e geocodifica para roteirização.
+              Selecione vários arquivos de uma vez. A IA lê cada nota e só permite roteirizar quando todas estiverem corretas.
             </p>
           </CardContent>
         </Card>

@@ -225,6 +225,7 @@ export type Database = {
           nome: string
           placa: string | null
           telefone: string | null
+          user_id: string | null
           veiculo: string | null
         }
         Insert: {
@@ -241,6 +242,7 @@ export type Database = {
           nome: string
           placa?: string | null
           telefone?: string | null
+          user_id?: string | null
           veiculo?: string | null
         }
         Update: {
@@ -257,6 +259,7 @@ export type Database = {
           nome?: string
           placa?: string | null
           telefone?: string | null
+          user_id?: string | null
           veiculo?: string | null
         }
         Relationships: [
@@ -271,10 +274,12 @@ export type Database = {
       }
       paradas: {
         Row: {
+          assinatura_url: string | null
           checkin_time: string | null
           checkout_time: string | null
           company_id: string
           created_at: string
+          data_rota: string | null
           endereco: string | null
           eta_minutos: number | null
           fiscal_note_id: string | null
@@ -284,6 +289,7 @@ export type Database = {
           id: string
           lat: number | null
           lng: number | null
+          motivo_falha: string | null
           motorista_id: string | null
           municipio: string | null
           nome: string
@@ -298,10 +304,12 @@ export type Database = {
           volume: number | null
         }
         Insert: {
+          assinatura_url?: string | null
           checkin_time?: string | null
           checkout_time?: string | null
           company_id: string
           created_at?: string
+          data_rota?: string | null
           endereco?: string | null
           eta_minutos?: number | null
           fiscal_note_id?: string | null
@@ -311,6 +319,7 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          motivo_falha?: string | null
           motorista_id?: string | null
           municipio?: string | null
           nome: string
@@ -325,10 +334,12 @@ export type Database = {
           volume?: number | null
         }
         Update: {
+          assinatura_url?: string | null
           checkin_time?: string | null
           checkout_time?: string | null
           company_id?: string
           created_at?: string
+          data_rota?: string | null
           endereco?: string | null
           eta_minutos?: number | null
           fiscal_note_id?: string | null
@@ -338,6 +349,7 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          motivo_falha?: string | null
           motorista_id?: string | null
           municipio?: string | null
           nome?: string
@@ -484,9 +496,10 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      user_motorista_ids: { Args: { _user_id: string }; Returns: string[] }
     }
     Enums: {
-      app_role: "admin" | "member" | "super_admin"
+      app_role: "admin" | "member" | "super_admin" | "motorista" | "ajudante"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -614,7 +627,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "member", "super_admin"],
+      app_role: ["admin", "member", "super_admin", "motorista", "ajudante"],
     },
   },
 } as const
