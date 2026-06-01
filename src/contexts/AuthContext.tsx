@@ -12,6 +12,7 @@ interface AuthCtx {
   company: Company | null;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  isMotorista: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [company, setCompany] = useState<Company | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isMotorista, setIsMotorista] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,12 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from('user_roles')
           .select('role')
           .eq('user_id', uid);
-        setIsAdmin(!!roles?.some(r => r.role === 'admin' || r.role === 'super_admin'));
-        setIsSuperAdmin(!!roles?.some(r => r.role === 'super_admin'));
+        const roleList = (roles || []).map(r => r.role);
+        const admin = roleList.some(r => r === 'admin' || r === 'super_admin');
+        setIsAdmin(admin);
+        setIsSuperAdmin(roleList.some(r => r === 'super_admin'));
+        setIsMotorista(roleList.includes('motorista') && !admin);
       } else {
         setCompany(null);
         setIsAdmin(false);
         setIsSuperAdmin(false);
+        setIsMotorista(false);
       }
     };
 
@@ -61,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (sess?.user) {
         setTimeout(() => loadProfile(sess.user.id), 0);
       } else {
-        setProfile(null); setCompany(null); setIsAdmin(false); setIsSuperAdmin(false);
+        setProfile(null); setCompany(null); setIsAdmin(false); setIsSuperAdmin(false); setIsMotorista(false);
       }
     });
 
@@ -76,11 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setProfile(null); setCompany(null); setIsAdmin(false); setIsSuperAdmin(false);
+    setProfile(null); setCompany(null); setIsAdmin(false); setIsSuperAdmin(false); setIsMotorista(false);
   };
 
   return (
-    <Ctx.Provider value={{ session, user, profile, company, isAdmin, isSuperAdmin, loading, signOut }}>
+    <Ctx.Provider value={{ session, user, profile, company, isAdmin, isSuperAdmin, isMotorista, loading, signOut }}>
       {children}
     </Ctx.Provider>
   );

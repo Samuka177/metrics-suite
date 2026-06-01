@@ -12,6 +12,7 @@ import AppShell from "./pages/AppShell";
 import ConvitesAdmin from "./pages/ConvitesAdmin";
 import EmpresasAdmin from "./pages/EmpresasAdmin";
 import AuditoriaPage from "./pages/AuditoriaPage";
+import MotoristaApp from "./pages/MotoristaApp";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ export default function App() {
               <Route path="/admin/convites" element={<ProtectedRoute><AppProvider><ConvitesAdmin /></AppProvider></ProtectedRoute>} />
               <Route path="/admin/empresas" element={<ProtectedRoute><AppProvider><EmpresasAdmin /></AppProvider></ProtectedRoute>} />
               <Route path="/admin/auditoria" element={<ProtectedRoute><AppProvider><AuditoriaPage /></AppProvider></ProtectedRoute>} />
+              <Route path="/motorista" element={<ProtectedRoute><MotoristaApp /></ProtectedRoute>} />
               <Route path="/*" element={<ProtectedRoute><AppProvider><AppShell /></AppProvider></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
