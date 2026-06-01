@@ -6,56 +6,59 @@
 
 @layer base {
   :root {
-    --background: 40 10% 96%;
-    --foreground: 40 10% 10%;
+    /* RotiFlow dark navy palette inspired by brand artwork */
+    --background: 220 60% 9%;
+    --foreground: 210 40% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 40 10% 10%;
+    --card: 220 50% 13%;
+    --card-foreground: 210 40% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 40 10% 10%;
+    --popover: 220 50% 13%;
+    --popover-foreground: 210 40% 96%;
 
-    --primary: 40 60% 42%;
-    --primary-foreground: 0 0% 100%;
+    /* Primary = brand orange */
+    --primary: 32 95% 55%;
+    --primary-foreground: 220 60% 9%;
 
-    --secondary: 40 15% 92%;
-    --secondary-foreground: 40 10% 10%;
+    /* Secondary = brand blue */
+    --secondary: 217 91% 60%;
+    --secondary-foreground: 220 60% 9%;
 
-    --muted: 40 10% 94%;
-    --muted-foreground: 40 8% 45%;
+    --muted: 220 40% 18%;
+    --muted-foreground: 215 25% 70%;
 
-    --accent: 40 15% 92%;
-    --accent-foreground: 40 10% 10%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 220 60% 9%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 100 72% 25%;
-    --success-foreground: 0 0% 100%;
+    --success: 142 70% 45%;
+    --success-foreground: 220 60% 9%;
 
-    --warning: 40 60% 42%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 32 95% 55%;
+    --warning-foreground: 220 60% 9%;
 
-    --border: 40 10% 88%;
-    --input: 40 10% 88%;
-    --ring: 40 60% 42%;
+    --border: 220 40% 22%;
+    --input: 220 40% 22%;
+    --ring: 32 95% 55%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 40 10% 12%;
-    --sidebar-foreground: 40 20% 90%;
-    --sidebar-primary: 40 60% 50%;
-    --sidebar-primary-foreground: 40 10% 12%;
-    --sidebar-accent: 40 15% 20%;
-    --sidebar-accent-foreground: 40 20% 90%;
-    --sidebar-border: 40 15% 20%;
-    --sidebar-ring: 40 60% 50%;
+    --sidebar-background: 220 65% 7%;
+    --sidebar-foreground: 210 40% 92%;
+    --sidebar-primary: 32 95% 55%;
+    --sidebar-primary-foreground: 220 60% 9%;
+    --sidebar-accent: 220 50% 15%;
+    --sidebar-accent-foreground: 210 40% 92%;
+    --sidebar-border: 220 40% 20%;
+    --sidebar-ring: 32 95% 55%;
 
-    --chart-1: 40 60% 42%;
-    --chart-2: 100 72% 25%;
-    --chart-3: 210 60% 50%;
+    --chart-1: 32 95% 55%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 142 70% 45%;
     --chart-4: 0 84% 60%;
-    --chart-5: 280 60% 50%;
+    --chart-5: 280 70% 60%;
   }
 }
 

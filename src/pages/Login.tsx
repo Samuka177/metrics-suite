@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Lock, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import bgAsset from '@/assets/rotiflow-bg.png.asset.json';
 
 const SUPER_EMAIL = 'admin@rotiflow.app';
 
@@ -23,7 +24,6 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Atalho do super admin: usuário "admin" é mapeado para admin@rotiflow.app
     const loginEmail = email.trim().toLowerCase() === 'admin' ? SUPER_EMAIL : email.trim();
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
     setLoading(false);
@@ -36,10 +36,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-primary/5 to-background">
-      <div className="card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 bg-background bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: `url(${bgAsset.url})` }}
+    >
+      <div className="absolute inset-0 bg-background/40 backdrop-blur-[2px]" />
+      <div className="relative card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-card/85 backdrop-blur-md border-border/60 shadow-2xl">
         <div className="flex flex-col items-center gap-2">
-          <h1 className="text-3xl font-bold text-foreground">RotiFlow</h1>
+          <h1 className="text-3xl font-bold">
+            <span className="text-primary">Roti</span>
+            <span className="text-secondary">Flow</span>
+          </h1>
           <p className="text-sm text-muted-foreground text-center">
             Sistema de Roteirização e Gestão de Entregas
           </p>
