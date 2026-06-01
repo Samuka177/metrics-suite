@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { MapPin, Users, FileText, BarChart3, Menu, LogOut, UserPlus, Building2, Shield, FileSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -24,7 +24,9 @@ const tabs: { key: Tab; label: string; icon: typeof MapPin }[] = [
 
 export default function AppShell() {
   const [tab, setTab] = useState<Tab>('rotas');
-  const { company, profile, isAdmin, isSuperAdmin, signOut } = useAuth();
+  const { company, profile, isAdmin, isSuperAdmin, isMotorista, signOut } = useAuth();
+
+  if (isMotorista) return <Navigate to="/motorista" replace />;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
