@@ -37,10 +37,14 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4 bg-background bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: `url(${bgAsset.url})` }}
+      className="min-h-screen flex items-center justify-center md:justify-end px-4 md:px-16 bg-background bg-no-repeat"
+      style={{
+        backgroundImage: `url(${bgAsset.url})`,
+        backgroundSize: 'contain',
+        backgroundPosition: 'left center',
+      }}
     >
-      <div className="relative card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-card/70 backdrop-blur-md border-border/60 shadow-2xl">
+      <div className="relative card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-card/80 backdrop-blur-md border-border/60 shadow-2xl">
 
         <div className="flex flex-col items-center gap-2">
           <h1 className="text-3xl font-bold">
