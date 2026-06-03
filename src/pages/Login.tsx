@@ -40,8 +40,8 @@ export default function Login() {
       className="min-h-screen flex items-center justify-center px-4 bg-background bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: `url(${bgAsset.url})` }}
     >
-      <div className="absolute inset-0 bg-background/40 backdrop-blur-[2px]" />
-      <div className="relative card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-card/85 backdrop-blur-md border-border/60 shadow-2xl">
+      <div className="relative card-surface p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-card/70 backdrop-blur-md border-border/60 shadow-2xl">
+
         <div className="flex flex-col items-center gap-2">
           <h1 className="text-3xl font-bold">
             <span className="text-primary">Roti</span>
