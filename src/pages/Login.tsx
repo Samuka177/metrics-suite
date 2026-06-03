@@ -43,14 +43,11 @@ export default function Login() {
       <div className="relative p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-transparent border border-white/15 backdrop-blur-md shadow-2xl">
 
         <div className="flex flex-col items-center gap-2">
-          <h1 className="text-3xl font-bold">
-            <span className="text-primary">Roti</span>
-            <span className="text-secondary">Flow</span>
-          </h1>
           <p className="text-sm text-muted-foreground text-center">
             Sistema de Roteirização e Gestão de Entregas
           </p>
         </div>
+
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
