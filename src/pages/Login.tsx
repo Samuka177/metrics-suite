@@ -37,7 +37,7 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen flex items-end justify-center px-4 pb-10 bg-background bg-cover bg-center bg-no-repeat"
+      className="min-h-screen flex items-start justify-center px-4 pt-[32vh] pb-10 bg-background bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: `url(${bgAsset.url})` }}
     >
       <div className="relative p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-transparent border border-white/15 backdrop-blur-md shadow-2xl">
