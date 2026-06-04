@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const SUPER_EMAIL = 'admin@rotiflow.app';
-const SUPER_PASSWORD = 'Adm@1100';
+const SUPER_PASSWORD = '123456';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
