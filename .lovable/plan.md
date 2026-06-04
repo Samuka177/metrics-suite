@@ -1,72 +1,62 @@
-# Plano de implementação
+# Auditoria do roadmap RotiFlow
 
-## 1. Upload múltiplo de notas (PDF/XML/imagens)
-- `NFeTab.tsx`: aceitar `multiple` no input, processar em fila com barra de progresso (X de Y).
-- Mostrar lista de resultados por arquivo (sucesso/erro/incompleto).
-- Botão **"Adicionar à rota"** global aparece SÓ quando todos os arquivos terminaram E não há campos pendentes de correção.
+## Status atual por item
 
-## 2. Bloqueio de inserção até terminar import
-- Estado `processing` desabilita o botão "Adicionar todas à rota".
-- Contador "Processando 3/8…" visível.
+### Fase 1 — MVP vendável
 
-## 3. Detecção de duplicatas
-- Critério: mesma `chave` NF-e OU (mesmo `emitente_cnpj` + `numero` + `serie`) OU (mesmo destinatário + endereço + mesmo dia).
-- Verificar contra `fiscal_notes` já no banco + dentro do lote atual.
-- UI: badge amarelo "Possível duplicata" com botão **Ignorar** / **Importar mesmo assim**.
+| Item | Status | Observação |
+|---|---|---|
+| Importação NF-e / XML | ✅ Existe | `supabase/functions/parse-fiscal-note` + `NFeTab.tsx` + `ImportModal` |
+| Geocodificação + revisão manual | ✅ Existe | `utils/geocode.ts` (Nominatim) + `AddressReviewDialog.tsx` + `addressValidation.ts` |
+| Motor de rota básico (VRP) | 🟡 Parcial | `nearestNeighborOrder` existe; **falta 2-opt** e **falta OSRM** (usa Haversine, não distância por estrada) |
+| Envio de rota por WhatsApp | ✅ Existe | `utils/whatsapp.ts` + `buildRouteMessage` |
+| Persistência multi-empresa (Supabase + RLS) | ✅ Existe | Tabelas com RLS por `company_id`, super admin, convites |
 
-## 4. Mapa redimensionável (split pane)
-- Em `RotasTab.tsx` usar `ResizablePanelGroup` (já existe em `components/ui/resizable.tsx`) para dividir lista de paradas × mapa.
-- Persistir tamanho em `localStorage`.
+### Fase 2 — produto competitivo
 
-## 6. Editar parada na aba Rotas
-- Investigar handler atual em `RotasTab.tsx` — provavelmente dialog não abre ou save não persiste.
-- Corrigir e adicionar campos: nome, endereço, horário, peso, volume, observações, telefone.
+| Item | Status | Observação |
+|---|---|---|
+| Janelas de tempo + restrições avançadas | 🟡 Parcial | Campos `horario_min/max`, `capacidade_peso/volume` existem mas **não são respeitados no algoritmo** de roteirização |
+| App do motorista (PWA) | 🟡 Parcial | `MotoristaApp.tsx` + `SignaturePad` funcionam, mas **não é PWA instalável** (sem manifest/service worker) |
+| Rastreamento GPS tempo real | ❌ Não existe | Nenhuma tabela de posições, sem Realtime, sem envio de coordenadas do motorista |
+| Dashboard de KPIs e relatórios | 🟡 Parcial | `Dashboard.tsx` e `Relatorios.tsx` existem com dados mock/vendas; **faltam KPIs operacionais reais** (OTIF, custo/entrega, km/entrega, taxa insucesso) baseados em `paradas` |
 
-## 7. App do motorista
-- Nova role `motorista` (enum `app_role`).
-- Rota `/motorista` protegida: lista paradas do dia atribuídas ao motorista logado.
-- Ações por parada:
-  - **Check-in** (registra `checkin_time` + geolocation)
-  - **Entregue** → status `entregue` + `checkout_time`
-  - **Não realizada** → abre dialog para motivo, salva em `paradas.observacoes` + status `falhou`
-- Login normal email/senha; ao logar, se role = motorista, redireciona para `/motorista`.
+### Fase 3 — escala e receita recorrente
 
-## 8. Coleta de assinatura
-- Dentro de cada parada (app motorista) botão **"Coletar assinatura"**.
-- Canvas de assinatura (touch/mouse) — usar `react-signature-canvas` ou implementação canvas nativa.
-- Ao confirmar: gerar PDF (jsPDF) com nome cliente, data/hora, NF, assinatura → upload para Storage bucket `assinaturas` (privado, RLS por company).
-- Salvar URL em `paradas.assinatura_url` (nova coluna).
-
-## 9. Cadastro de colaboradores com senha + perfil
-- Em `EmpresasAdmin.tsx` (criar usuário): adicionar campo **senha** e select de **perfil** (motorista / ajudante / admin).
-- Edge function `admin-actions` já cria user com senha; estender para aceitar `role` e gravar em `user_roles`.
-- Adicionar `ajudante` ao enum `app_role` se ainda não existir.
+| Item | Status |
+|---|---|
+| Integrações ERP/WMS (TOTVS, Sankhya, VTEX) | ❌ Não existe |
+| Resequenciamento dinâmico on-the-fly | ❌ Não existe |
+| Gestão transportadoras + auditoria de frete + CT-e | ❌ Não existe |
 
 ---
 
-## Migrations necessárias
-```sql
-ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'motorista';
-ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'ajudante';
+## O que proponho fazer agora
 
-ALTER TABLE paradas
-  ADD COLUMN assinatura_url text,
-  ADD COLUMN motivo_falha text,
-  ADD COLUMN data_rota date DEFAULT CURRENT_DATE;
+Itens da **Fase 3** são projetos grandes (cada um leva semanas — integração ERP real, parser CT-e, etc.). Não dá pra entregar tudo num turno e fingir que ficou pronto. Vou focar em **fechar Fase 1 e cobrir o essencial da Fase 2**:
 
--- vincular motorista (auth user) ao registro de motoristas
-ALTER TABLE motoristas ADD COLUMN user_id uuid;
+### Entregas deste turno
 
--- RLS: motorista vê só suas paradas
-CREATE POLICY "Motorista vê suas paradas" ON paradas FOR SELECT
-  USING (motorista_id IN (SELECT id FROM motoristas WHERE user_id = auth.uid()));
-CREATE POLICY "Motorista atualiza suas paradas" ON paradas FOR UPDATE
-  USING (motorista_id IN (SELECT id FROM motoristas WHERE user_id = auth.uid()));
+1. **Motor de rota — melhoria 2-opt**
+   Adicionar `twoOptImprove()` em `utils/routeOptimization.ts` e usar após o nearest-neighbor. (OSRM por estrada fica como nota — exige chamada externa; sigo com Haversine + 2-opt agora.)
 
--- Storage
-INSERT INTO storage.buckets (id, name, public) VALUES ('assinaturas', 'assinaturas', false);
--- policies por company_id
-```
+2. **Janelas de tempo + capacidade no roteirizador**
+   Estender a otimização para respeitar `horario_min/max` da parada e `capacidade_peso/volume` do motorista (penalizar/dividir rotas que estouram).
 
-## Pontos que preciso confirmar
-Antes de implementar, ver perguntas a seguir.
+3. **PWA instalável (manifest-only)**
+   `public/manifest.webmanifest` + tags no `index.html` + ícones reaproveitando o logo. Sem service worker (usuário não pediu offline). Isso transforma o app do motorista em "instalar na tela inicial".
+
+4. **KPIs operacionais reais**
+   Substituir/complementar `Dashboard.tsx` com cards de OTIF, taxa de insucesso, km totais, paradas/dia, tempo médio por entrega — tudo calculado de `paradas` da empresa.
+
+5. **Rastreamento GPS — base mínima**
+   Migration criando tabela `motorista_posicoes` (lat/lng/timestamp/motorista_id/company_id) com RLS. App do motorista envia posição a cada X segundos durante rota ativa. Painel admin mostra última posição no mapa via Supabase Realtime.
+
+### Fora do escopo deste turno (preciso confirmar antes)
+
+- Integração ERP real (TOTVS/Sankhya/VTEX) — exige credenciais e contrato com cada API
+- Auditoria de frete + emissão CT-e — projeto fiscal completo
+- Resequenciamento dinâmico avançado — pode ser feito depois com base no motor da etapa 1
+- Conversão para React Native — alternativa ao PWA, mudaria a stack
+
+Confirma que sigo com os 5 itens acima? Se quiser priorizar diferente (ex.: só PWA + GPS, ou pular GPS), me diz.
