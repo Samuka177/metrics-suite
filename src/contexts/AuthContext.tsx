@@ -65,9 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
-        setTimeout(() => loadProfile(sess.user.id), 0);
+        setLoading(true);
+        setTimeout(() => {
+          loadProfile(sess.user.id).finally(() => setLoading(false));
+        }, 0);
       } else {
         setProfile(null); setCompany(null); setIsAdmin(false); setIsSuperAdmin(false); setIsMotorista(false);
+        setLoading(false);
       }
     });
 
