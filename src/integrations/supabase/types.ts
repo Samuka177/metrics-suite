@@ -210,6 +210,42 @@ export type Database = {
           },
         ]
       }
+      motorista_posicoes: {
+        Row: {
+          accuracy: number | null
+          company_id: string
+          created_at: string
+          heading: number | null
+          id: string
+          lat: number
+          lng: number
+          motorista_id: string
+          speed: number | null
+        }
+        Insert: {
+          accuracy?: number | null
+          company_id: string
+          created_at?: string
+          heading?: number | null
+          id?: string
+          lat: number
+          lng: number
+          motorista_id: string
+          speed?: number | null
+        }
+        Update: {
+          accuracy?: number | null
+          company_id?: string
+          created_at?: string
+          heading?: number | null
+          id?: string
+          lat?: number
+          lng?: number
+          motorista_id?: string
+          speed?: number | null
+        }
+        Relationships: []
+      }
       motoristas: {
         Row: {
           ativo: boolean
