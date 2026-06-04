@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { MapPin, LogOut, CheckCircle2, XCircle, PenLine, Navigation, Phone, Clock, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import SignaturePad from '@/components/motorista/SignaturePad';
+import { useGpsTracker } from '@/hooks/useGpsTracker';
 
 interface Parada {
   id: string;
@@ -71,6 +72,15 @@ export default function MotoristaApp() {
       setLoading(false);
     })();
   }, [user, profile?.email, today]);
+
+  // Rastreamento GPS ao vivo: ativo enquanto houver paradas pendentes/em andamento hoje
+  const hasActiveStops = paradas.some(p => p.status === 'pendente' || p.status === 'em_andamento');
+  useGpsTracker({
+    active: hasActiveStops,
+    motoristaId,
+    companyId: paradas[0]?.company_id || null,
+    intervalMs: 30000,
+  });
 
   const reload = async () => {
     if (!motoristaId) return;

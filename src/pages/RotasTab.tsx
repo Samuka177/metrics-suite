@@ -21,6 +21,7 @@ import ImportModal from '@/components/import/ImportModal';
 import { sendRouteViaWhatsApp, buildRouteLink } from '@/utils/whatsapp';
 import RouteTemplatesDialog from '@/components/routes/RouteTemplatesDialog';
 import AddressReviewDialog from '@/components/routes/AddressReviewDialog';
+import LiveTrackingPanel from '@/components/routes/LiveTrackingPanel';
 import { needsAddressReview } from '@/utils/addressValidation';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
@@ -573,6 +574,9 @@ export default function RotasTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Rastreamento ao vivo */}
+      <LiveTrackingPanel motoristas={motoristasList} />
 
       {/* Enviar rota via WhatsApp + copiar link */}
       {motoristas.some(m => paradas.some(p => p.motoristaId === m.id)) && (
