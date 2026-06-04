@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { Parada, Motorista, Produto, ConfigRota } from '@/types/rotafacil';
-import { nearestNeighborOrder, totalDistance, haversine } from '@/utils/routeOptimization';
+import { nearestNeighborOrder, totalDistance, haversine, twoOptImprove, optimizeWithWindows, distributeWithCapacity } from '@/utils/routeOptimization';
 import { geocodeAddress } from '@/utils/geocode';
 import { logAction } from '@/utils/audit';
 import { supabase } from '@/integrations/supabase/client';
@@ -288,11 +288,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (wc.length < 2) return prev;
       const coords = wc.map(p => ({ lat: p.lat!, lng: p.lng! }));
       const distBefore = totalDistance(coords);
-      const order = nearestNeighborOrder(coords);
-      const optimized = order.map(i => wc[i]);
-      const distAfter = totalDistance(order.map(i => coords[i]));
+      // 1) Optimize respecting time windows (horarioMin anchors chronologically)
+      const stops = wc.map(p => ({ lat: p.lat!, lng: p.lng!, horarioMin: p.horarioMin }));
+      const order = optimizeWithWindows(stops);
+      // 2) 2-opt polish on the resulting order
+      const polished = twoOptImprove(coords, order);
+      const optimized = polished.map(i => wc[i]);
+      const distAfter = totalDistance(polished.map(i => coords[i]));
       setLastOptimization({ distanceBefore: distBefore, distanceAfter: distAfter, savings: distBefore - distAfter });
-      addAction(`Rota otimizada: economia de ${(distBefore - distAfter).toFixed(1)} km`);
+      addAction(`Rota otimizada (2-opt + janelas): economia de ${(distBefore - distAfter).toFixed(1)} km`);
       return calcETAs([...optimized, ...woc], config.velocidadeMedia);
     });
   };
@@ -397,7 +401,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const av = motoristas.filter(m => m.ativo || motoristas.length > 0);
     if (av.length === 0) return;
     const un = paradas.filter(p => !p.motoristaId && p.status === 'pendente');
-    const updates = un.map((p, i) => ({ id: p.id, motoristaId: av[i % av.length].id }));
+    // Greedy fit-decreasing respeitando capacidade de peso e volume
+    const assignments = distributeWithCapacity(
+      un.map(p => ({ id: p.id, peso: p.peso, volume: p.volume })),
+      av.map(m => ({ id: m.id, capacidadePeso: m.capacidadePeso, capacidadeVolume: m.capacidadeVolume })),
+    );
+    const updates = Object.entries(assignments).map(([id, motoristaId]) => ({ id, motoristaId }));
     await Promise.all(updates.map(u => supabase.from('paradas').update({ motorista_id: u.motoristaId }).eq('id', u.id)));
     setParadas(prev => {
       const u = [...prev];
@@ -407,7 +416,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       return calcETAs(u, config.velocidadeMedia);
     });
-    addAction(`Paradas distribuídas entre ${av.length} motoristas`);
+    addAction(`Paradas distribuídas entre ${av.length} motoristas (com capacidade)`);
   };
 
   const atribuirParada = async (paradaId: string, motoristaId: string | undefined) => {
