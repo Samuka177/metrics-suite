@@ -237,14 +237,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addMotorista: AppContextType['addMotorista'] = async (m) => {
-    if (!companyId) return;
+    if (!companyId) throw new Error('Sem empresa vinculada ao usuário.');
     const cor = DRIVER_COLORS[motoristas.length % DRIVER_COLORS.length];
-    const { data } = await supabase.from('motoristas').insert({
+    const { data, error } = await supabase.from('motoristas').insert({
       company_id: companyId, nome: m.nome, placa: m.placa,
       capacidade_peso: m.capacidadePeso, capacidade_volume: m.capacidadeVolume,
       telefone: m.telefone, email: m.email,
       cor, ativo: false,
     }).select().single();
+    if (error) {
+      console.error('addMotorista error', error);
+      throw new Error(error.message || 'Falha ao cadastrar motorista');
+    }
     if (data) setMotoristas(prev => [...prev, rowToMotorista(data)]);
     addAction(`Motorista "${m.nome}" cadastrado`);
   };

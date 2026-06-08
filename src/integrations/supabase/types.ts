@@ -94,6 +94,7 @@ export type Database = {
           id: string
           itens: Json | null
           numero: string | null
+          observacoes: string | null
           peso_kg: number | null
           raw_extracted: Json | null
           serie: string | null
@@ -121,6 +122,7 @@ export type Database = {
           id?: string
           itens?: Json | null
           numero?: string | null
+          observacoes?: string | null
           peso_kg?: number | null
           raw_extracted?: Json | null
           serie?: string | null
@@ -148,6 +150,7 @@ export type Database = {
           id?: string
           itens?: Json | null
           numero?: string | null
+          observacoes?: string | null
           peso_kg?: number | null
           raw_extracted?: Json | null
           serie?: string | null

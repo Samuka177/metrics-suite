@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -41,6 +42,7 @@ interface NoteItem {
   includeAnyway?: boolean; // se usuário escolheu importar duplicata
   editing?: boolean;
   edit: { logradouro: string; numero: string; bairro: string; municipio: string; uf: string; cep: string };
+  observacoes?: string;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -242,10 +244,14 @@ export default function NFeTab() {
         endereco: enderecoCompleto,
         tipo: 'Delivery',
         peso: p.peso_kg, volume: p.volume_m3,
+        observacoes: it.observacoes || undefined,
         produtos: (p.itens || []).map(pr => ({
           nome: pr.nome, quantidade: String(pr.quantidade ?? ''), unidade: pr.unidade || '',
         })),
       });
+      if (it.fiscalNoteId && it.observacoes) {
+        await supabase.from('fiscal_notes').update({ observacoes: it.observacoes }).eq('id', it.fiscalNoteId);
+      }
     }
     toast.success(`${list.length} parada(s) adicionada(s) à rota`);
     setItems([]);
@@ -390,6 +396,19 @@ export default function NFeTab() {
                     <Button size="sm" variant="ghost" onClick={() => setItems(prev => prev.map(x => x.id === it.id ? { ...x, editing: false } : x))}>Cancelar</Button>
                     <Button size="sm" onClick={() => applyEdit(it.id)}><Save className="h-3 w-3 mr-1" /> Aplicar</Button>
                   </div>
+                </div>
+              )}
+
+              {it.parsed && it.status !== 'processing' && (
+                <div className="pt-1">
+                  <label className="text-[10px] font-medium text-muted-foreground">Observação para a entrega</label>
+                  <Textarea
+                    rows={2}
+                    placeholder="Ex: entregar no apto 201, falar com porteiro…"
+                    value={it.observacoes || ''}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, observacoes: e.target.value } : x))}
+                    className="text-xs mt-0.5"
+                  />
                 </div>
               )}
 
