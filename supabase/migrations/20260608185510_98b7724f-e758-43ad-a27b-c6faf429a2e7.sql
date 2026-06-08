@@ -1,0 +1,1 @@
+ALTER TABLE public.fiscal_notes ADD COLUMN IF NOT EXISTS observacoes text;
