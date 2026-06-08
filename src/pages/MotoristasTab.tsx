@@ -21,15 +21,19 @@ export default function MotoristasTab() {
 
   const emRota = motoristas.filter(m => m.ativo).length;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!nome || !placa) { toast.error('Preencha nome e placa'); return; }
-    addMotorista({
-      nome, placa, telefone: telefone || undefined, email: email || undefined,
-      capacidadePeso: capPeso ? Number(capPeso) : undefined,
-      capacidadeVolume: capVolume ? Number(capVolume) : undefined,
-    });
-    toast.success(`Motorista "${nome}" cadastrado!`);
-    setNome(''); setPlaca(''); setTelefone(''); setEmail(''); setCapPeso(''); setCapVolume(''); setOpen(false);
+    try {
+      await addMotorista({
+        nome, placa, telefone: telefone || undefined, email: email || undefined,
+        capacidadePeso: capPeso ? Number(capPeso) : undefined,
+        capacidadeVolume: capVolume ? Number(capVolume) : undefined,
+      });
+      toast.success(`Motorista "${nome}" cadastrado!`);
+      setNome(''); setPlaca(''); setTelefone(''); setEmail(''); setCapPeso(''); setCapVolume(''); setOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao cadastrar motorista');
+    }
   };
 
   const checkin = (id: string) => {
