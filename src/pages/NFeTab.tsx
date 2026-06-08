@@ -243,10 +243,14 @@ export default function NFeTab() {
         endereco: enderecoCompleto,
         tipo: 'Delivery',
         peso: p.peso_kg, volume: p.volume_m3,
+        observacoes: it.observacoes || undefined,
         produtos: (p.itens || []).map(pr => ({
           nome: pr.nome, quantidade: String(pr.quantidade ?? ''), unidade: pr.unidade || '',
         })),
       });
+      if (it.fiscalNoteId && it.observacoes) {
+        await supabase.from('fiscal_notes').update({ observacoes: it.observacoes }).eq('id', it.fiscalNoteId);
+      }
     }
     toast.success(`${list.length} parada(s) adicionada(s) à rota`);
     setItems([]);
