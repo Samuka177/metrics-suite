@@ -41,6 +41,7 @@ interface NoteItem {
   includeAnyway?: boolean; // se usuário escolheu importar duplicata
   editing?: boolean;
   edit: { logradouro: string; numero: string; bairro: string; municipio: string; uf: string; cep: string };
+  observacoes?: string;
 }
 
 const FIELD_LABELS: Record<string, string> = {
