@@ -399,6 +399,19 @@ export default function NFeTab() {
                 </div>
               )}
 
+              {it.parsed && it.status !== 'processing' && (
+                <div className="pt-1">
+                  <label className="text-[10px] font-medium text-muted-foreground">Observação para a entrega</label>
+                  <Textarea
+                    rows={2}
+                    placeholder="Ex: entregar no apto 201, falar com porteiro…"
+                    value={it.observacoes || ''}
+                    onChange={e => setItems(prev => prev.map(x => x.id === it.id ? { ...x, observacoes: e.target.value } : x))}
+                    className="text-xs mt-0.5"
+                  />
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-1 pt-1">
                 {it.parsed && !it.editing && it.status !== 'processing' && (
                   <Button size="sm" variant="outline" className="h-7 text-[11px]"
