@@ -422,6 +422,46 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
         </div>
       </CardContent>
       <EditParadaDialog parada={parada} open={editing} onOpenChange={setEditing} />
+
+      {/* Falha dialog */}
+      <Dialog open={failOpen} onOpenChange={setFailOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Entrega não realizada</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">{parada.nome}</p>
+          <div className="space-y-2 mt-2">
+            <label className="text-xs font-medium">Motivo *</label>
+            <Select value={failMotivo} onValueChange={setFailMotivo}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MOTIVOS.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <label className="text-xs font-medium">Observações</label>
+            <Textarea rows={3} value={failObs} onChange={e => setFailObs(e.target.value)} placeholder="Detalhes adicionais (opcional)" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFailOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={submitFalha}>Registrar falha</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reagendar dialog */}
+      <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reagendar entrega</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">{parada.nome}</p>
+          <div className="space-y-2 mt-2">
+            <label className="text-xs font-medium">Nova data *</label>
+            <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} min={new Date().toISOString().slice(0, 10)} />
+            <p className="text-[10px] text-muted-foreground">A nota original será mantida e a parada será movida para a nova data — sem precisar reimportar.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleOpen(false)}>Cancelar</Button>
+            <Button onClick={submitReagendar}>Reagendar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 });
