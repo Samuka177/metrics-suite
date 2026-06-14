@@ -206,8 +206,12 @@ export default function MotoristaApp() {
                           <span>{[p.endereco, p.municipio, p.uf].filter(Boolean).join(', ')}</span>
                         </p>
                         {p.horario && <p className="text-[11px] text-muted-foreground"><Clock className="h-3 w-3 inline" /> {p.horario}</p>}
-                        {p.observacoes && <p className="text-[11px] text-foreground mt-1 italic">"{p.observacoes}"</p>}
-                      </div>
+                        {p.observacoes && (
+                          <div className="mt-1.5 flex items-start gap-1.5 bg-warning/15 border border-warning/40 rounded px-2 py-1">
+                            <Badge className="bg-warning text-warning-foreground text-[9px] shrink-0 h-4">OBS</Badge>
+                            <p className="text-[11px] text-foreground font-semibold leading-tight"><MessageSquare className="h-3 w-3 inline mr-0.5" />{p.observacoes}</p>
+                          </div>
+                        )}
                       {isDone && <CheckCircle2 className="h-5 w-5 text-success shrink-0" />}
                       {isFail && <XCircle className="h-5 w-5 text-destructive shrink-0" />}
                     </div>
