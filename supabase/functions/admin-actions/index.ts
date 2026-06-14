@@ -162,8 +162,48 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    if (action === 'create_motorista_user') {
+      const { company_id, motorista_id, email, password, full_name } = body;
+      if (!company_id || !motorista_id || !email || !password) {
+        return new Response(JSON.stringify({ error: 'missing fields' }), { status: 400, headers: corsHeaders });
+      }
+      if (String(password).length < 6) {
+        return new Response(JSON.stringify({ error: 'senha deve ter ao menos 6 caracteres' }), { status: 400, headers: corsHeaders });
+      }
+      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      let authUser = list.users.find((u: any) => u.email?.toLowerCase() === String(email).toLowerCase());
+      if (!authUser) {
+        const { data: created, error: uErr } = await admin.auth.admin.createUser({
+          email, password, email_confirm: true,
+          user_metadata: { full_name: full_name || email, motorista: true },
+        });
+        if (uErr) return new Response(JSON.stringify({ error: uErr.message }), { status: 400, headers: corsHeaders });
+        authUser = created.user;
+      } else {
+        await admin.auth.admin.updateUserById(authUser.id, { password, email_confirm: true });
+      }
+      await admin.from('profiles').upsert({
+        user_id: authUser!.id, company_id, email, full_name: full_name || email,
+      }, { onConflict: 'user_id' });
+      await admin.from('user_roles').upsert({
+        user_id: authUser!.id, company_id, role: 'motorista',
+      }, { onConflict: 'user_id,company_id,role' });
+      await admin.from('motoristas').update({ user_id: authUser!.id, email }).eq('id', motorista_id);
+      return new Response(JSON.stringify({ ok: true, user_id: authUser!.id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'reset_motorista_password') {
+      const { email, password } = body;
+      if (!email || !password) return new Response(JSON.stringify({ error: 'missing fields' }), { status: 400, headers: corsHeaders });
+      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const u = list.users.find((x: any) => x.email?.toLowerCase() === String(email).toLowerCase());
+      if (!u) return new Response(JSON.stringify({ error: 'usuário não encontrado' }), { status: 404, headers: corsHeaders });
+      const { error: e } = await admin.auth.admin.updateUserById(u.id, { password, email_confirm: true });
+      if (e) return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400, headers: corsHeaders });
-  } catch (e: any) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
