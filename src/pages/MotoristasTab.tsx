@@ -6,34 +6,88 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Users, Weight, Box, Trash2, AlertTriangle, MapPin } from 'lucide-react';
+import { Plus, Users, Weight, Box, Trash2, AlertTriangle, MapPin, KeyRound, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function MotoristasTab() {
   const { motoristas, addMotorista, updateMotorista, removeMotorista, paradas, capacityWarnings } = useApp();
+  const { profile } = useAuth();
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [nome, setNome] = useState('');
   const [placa, setPlaca] = useState('');
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [capPeso, setCapPeso] = useState('');
   const [capVolume, setCapVolume] = useState('');
+  const [pwdReset, setPwdReset] = useState<{ id: string; email: string } | null>(null);
+  const [novaSenha, setNovaSenha] = useState('');
 
   const emRota = motoristas.filter(m => m.ativo).length;
 
+  const resetForm = () => {
+    setNome(''); setPlaca(''); setTelefone(''); setEmail(''); setSenha('');
+    setCapPeso(''); setCapVolume('');
+  };
+
   const handleSave = async () => {
-    if (!nome || !placa) { toast.error('Preencha nome e placa'); return; }
+    // Validações
+    if (!nome.trim()) return toast.error('Nome é obrigatório');
+    if (nome.trim().length < 3) return toast.error('Nome muito curto');
+    if (!placa.trim()) return toast.error('Placa é obrigatória');
+    if (!email.trim()) return toast.error('E-mail é obrigatório (será o login do motorista)');
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    if (!emailOk) return toast.error('E-mail inválido');
+    if (!senha) return toast.error('Crie uma senha para o motorista');
+    if (senha.length < 6) return toast.error('Senha precisa ter ao menos 6 caracteres');
+    if (telefone && telefone.replace(/\D/g, '').length < 10) return toast.error('Telefone inválido');
+
+    setSaving(true);
     try {
-      await addMotorista({
-        nome, placa, telefone: telefone || undefined, email: email || undefined,
+      const novo = await addMotorista({
+        nome: nome.trim(), placa: placa.trim().toUpperCase(),
+        telefone: telefone.trim() || undefined,
+        email: email.trim().toLowerCase(),
         capacidadePeso: capPeso ? Number(capPeso) : undefined,
         capacidadeVolume: capVolume ? Number(capVolume) : undefined,
       });
-      toast.success(`Motorista "${nome}" cadastrado!`);
-      setNome(''); setPlaca(''); setTelefone(''); setEmail(''); setCapPeso(''); setCapVolume(''); setOpen(false);
+      // Criar usuário de login para o motorista
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: {
+          action: 'create_motorista_user',
+          company_id: profile?.company_id,
+          motorista_id: novo.id,
+          email: email.trim().toLowerCase(),
+          password: senha,
+          full_name: nome.trim(),
+        },
+      });
+      if (error || (data as any)?.error) {
+        toast.error(`Motorista criado, mas falhou criar login: ${(data as any)?.error || error?.message}`);
+      } else {
+        toast.success(`Motorista "${nome}" cadastrado e login criado!`);
+      }
+      resetForm();
+      setOpen(false);
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao cadastrar motorista');
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const handleResetPassword = async () => {
+    if (!pwdReset) return;
+    if (novaSenha.length < 6) return toast.error('Senha precisa ter ao menos 6 caracteres');
+    const { data, error } = await supabase.functions.invoke('admin-actions', {
+      body: { action: 'reset_motorista_password', company_id: profile?.company_id, email: pwdReset.email, password: novaSenha },
+    });
+    if (error || (data as any)?.error) return toast.error((data as any)?.error || error?.message);
+    toast.success('Senha atualizada');
+    setPwdReset(null); setNovaSenha('');
   };
 
   const checkin = (id: string) => {
@@ -57,40 +111,57 @@ export default function MotoristasTab() {
         <Button size="sm" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Motorista</Button>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Novo Motorista</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="text-sm font-medium">Nome completo</label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: João Silva" />
+              <label className="text-sm font-medium">Nome completo *</label>
+              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: João Silva" maxLength={100} />
             </div>
             <div>
-              <label className="text-sm font-medium">Placa do veículo</label>
-              <Input value={placa} onChange={e => setPlaca(e.target.value)} placeholder="ABC-1234" />
+              <label className="text-sm font-medium">Placa do veículo *</label>
+              <Input value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())} placeholder="ABC-1234" maxLength={10} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-medium">WhatsApp</label>
-                <Input value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 99999-0000" />
+                <Input value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 99999-0000" maxLength={20} />
               </div>
               <div>
-                <label className="text-xs font-medium">E-mail</label>
-                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="motorista@email.com" />
+                <label className="text-xs font-medium"><Mail className="inline h-3 w-3" /> E-mail (login) *</label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="motorista@email.com" maxLength={255} />
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium"><KeyRound className="inline h-3 w-3" /> Senha do app *</label>
+              <Input type="password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="Mínimo 6 caracteres" minLength={6} />
+              <p className="text-[10px] text-muted-foreground mt-0.5">O motorista usará este e-mail e senha para entrar no aplicativo.</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-medium"><Weight className="inline h-3 w-3 mr-0.5" />Capacidade (kg)</label>
-                <Input type="number" value={capPeso} onChange={e => setCapPeso(e.target.value)} placeholder="Ex: 100" />
+                <Input type="number" value={capPeso} onChange={e => setCapPeso(e.target.value)} placeholder="Ex: 100" min={0} />
               </div>
               <div>
                 <label className="text-xs font-medium"><Box className="inline h-3 w-3 mr-0.5" />Capacidade (m³)</label>
-                <Input type="number" value={capVolume} onChange={e => setCapVolume(e.target.value)} placeholder="Ex: 2.0" step="0.1" />
+                <Input type="number" value={capVolume} onChange={e => setCapVolume(e.target.value)} placeholder="Ex: 2.0" step="0.1" min={0} />
               </div>
             </div>
           </div>
-          <DialogFooter><Button onClick={handleSave} className="w-full">Salvar</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleSave} className="w-full" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pwdReset} onOpenChange={(o) => { if (!o) { setPwdReset(null); setNovaSenha(''); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Redefinir senha do motorista</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">E-mail: <strong>{pwdReset?.email}</strong></p>
+          <Input type="password" placeholder="Nova senha (mín. 6 caracteres)" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPwdReset(null); setNovaSenha(''); }}>Cancelar</Button>
+            <Button onClick={handleResetPassword}>Atualizar senha</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -123,7 +194,7 @@ export default function MotoristasTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-foreground">{m.nome}</p>
-                      <p className="text-xs text-muted-foreground">{m.placa}</p>
+                      <p className="text-xs text-muted-foreground">{m.placa}{m.email ? ` · ${m.email}` : ''}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <div className={`h-2 w-2 rounded-full ${m.ativo ? 'bg-success' : 'bg-muted-foreground/40'}`} />
                         <span className="text-xs text-muted-foreground">{m.ativo ? 'Em rota' : 'Disponível'}</span>
@@ -131,6 +202,12 @@ export default function MotoristasTab() {
                       </div>
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      {m.email && (
+                        <Button variant="ghost" size="sm" className="h-7 px-1" title="Redefinir senha"
+                          onClick={() => setPwdReset({ id: m.id, email: m.email! })}>
+                          <KeyRound className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {m.ativo ? (
                         <Button variant="outline" size="sm" className="text-destructive border-destructive h-7 text-xs" onClick={() => checkout(m.id)}>Check-out</Button>
                       ) : (
@@ -142,7 +219,6 @@ export default function MotoristasTab() {
                     </div>
                   </div>
 
-                  {/* Capacity indicators */}
                   {(pesoMax > 0 || volumeMax > 0) && (
                     <div className="grid grid-cols-2 gap-2 mt-1">
                       {pesoMax > 0 && (
@@ -166,7 +242,6 @@ export default function MotoristasTab() {
                     </div>
                   )}
 
-                  {/* Assigned stops summary */}
                   {assigned.length > 0 && (
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground border-t pt-1.5">
                       <MapPin className="h-3 w-3" />

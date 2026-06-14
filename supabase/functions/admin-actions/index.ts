@@ -26,14 +26,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Verificar super_admin
-    const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', user.id);
-    if (!roles?.some(r => r.role === 'super_admin')) {
-      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
-    }
-
     const body = await req.json();
     const { action } = body;
+
+    // Verificar permissão: super_admin sempre; algumas ações também permitem admin da empresa
+    const { data: roles } = await admin.from('user_roles').select('role, company_id').eq('user_id', user.id);
+    const isSuper = roles?.some((r: any) => r.role === 'super_admin');
+    const isCompanyAdmin = (cid: string) => roles?.some((r: any) => r.role === 'admin' && r.company_id === cid);
+
+    const motoristaActions = new Set(['create_motorista_user', 'reset_motorista_password']);
+    if (!isSuper && !(motoristaActions.has(action) && body.company_id && isCompanyAdmin(body.company_id))) {
+      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
+    }
 
     if (action === 'create_company_with_admin') {
       const { company_name, email_domain, admin_email, admin_password, admin_name } = body;
@@ -155,6 +159,47 @@ Deno.serve(async (req) => {
       await admin.from('user_roles').delete().eq('user_id', user_id);
       await admin.from('profiles').delete().eq('user_id', user_id);
       await admin.auth.admin.deleteUser(user_id);
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'create_motorista_user') {
+      const { company_id, motorista_id, email, password, full_name } = body;
+      if (!company_id || !motorista_id || !email || !password) {
+        return new Response(JSON.stringify({ error: 'missing fields' }), { status: 400, headers: corsHeaders });
+      }
+      if (String(password).length < 6) {
+        return new Response(JSON.stringify({ error: 'senha deve ter ao menos 6 caracteres' }), { status: 400, headers: corsHeaders });
+      }
+      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      let authUser = list.users.find((u: any) => u.email?.toLowerCase() === String(email).toLowerCase());
+      if (!authUser) {
+        const { data: created, error: uErr } = await admin.auth.admin.createUser({
+          email, password, email_confirm: true,
+          user_metadata: { full_name: full_name || email, motorista: true },
+        });
+        if (uErr) return new Response(JSON.stringify({ error: uErr.message }), { status: 400, headers: corsHeaders });
+        authUser = created.user;
+      } else {
+        await admin.auth.admin.updateUserById(authUser.id, { password, email_confirm: true });
+      }
+      await admin.from('profiles').upsert({
+        user_id: authUser!.id, company_id, email, full_name: full_name || email,
+      }, { onConflict: 'user_id' });
+      await admin.from('user_roles').upsert({
+        user_id: authUser!.id, company_id, role: 'motorista',
+      }, { onConflict: 'user_id,company_id,role' });
+      await admin.from('motoristas').update({ user_id: authUser!.id, email }).eq('id', motorista_id);
+      return new Response(JSON.stringify({ ok: true, user_id: authUser!.id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'reset_motorista_password') {
+      const { email, password } = body;
+      if (!email || !password) return new Response(JSON.stringify({ error: 'missing fields' }), { status: 400, headers: corsHeaders });
+      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const u = list.users.find((x: any) => x.email?.toLowerCase() === String(email).toLowerCase());
+      if (!u) return new Response(JSON.stringify({ error: 'usuário não encontrado' }), { status: 404, headers: corsHeaders });
+      const { error: e } = await admin.auth.admin.updateUserById(u.id, { password, email_confirm: true });
+      if (e) return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 

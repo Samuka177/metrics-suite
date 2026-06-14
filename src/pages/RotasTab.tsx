@@ -259,10 +259,42 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
 }) => {
   const { updateParada, removeParada, reorderParadas, marcarEntregue, marcarFalha, reagendarParada, atribuirParada, executionMode, paradas } = useApp();
   const [editing, setEditing] = useState(false);
+  const [failOpen, setFailOpen] = useState(false);
+  const [failMotivo, setFailMotivo] = useState<string>('cliente_ausente');
+  const [failObs, setFailObs] = useState('');
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [novaData, setNovaData] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
   const st = statusConfig[parada.status];
   const motorista = motoristas.find(m => m.id === parada.motoristaId);
 
   const capacityWarning = (parada.peso && parada.peso > 50) || (parada.volume && parada.volume > 1);
+
+  const MOTIVOS = [
+    { v: 'cliente_recusou', l: 'Cliente recusou' },
+    { v: 'avaria', l: 'Avaria no produto' },
+    { v: 'cliente_ausente', l: 'Cliente ausente' },
+    { v: 'endereco_incorreto', l: 'Endereço incorreto' },
+    { v: 'outros', l: 'Outros' },
+  ];
+
+  const submitFalha = async () => {
+    const label = MOTIVOS.find(m => m.v === failMotivo)?.l || failMotivo;
+    const motivo = failObs ? `${label}: ${failObs}` : label;
+    await marcarFalha(parada.id, motivo);
+    setFailOpen(false); setFailObs('');
+    toast.success('Entrega marcada como falha');
+  };
+
+  const submitReagendar = async () => {
+    if (!novaData) return toast.error('Selecione a nova data');
+    await reagendarParada(parada.id, novaData);
+    setRescheduleOpen(false);
+    toast.success(`Entrega reagendada para ${new Date(novaData + 'T00:00').toLocaleDateString('pt-BR')}`);
+  };
+
 
   return (
     <Card className={`transition-all ${isActive ? 'ring-2 ring-primary shadow-lg' : ''} ${parada.status === 'falhou' ? 'border-destructive/50' : ''} ${capacityWarning ? 'border-warning/50' : ''}`}>
@@ -320,9 +352,10 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
             </div>
 
             {parada.observacoes && (
-              <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5">
-                <MessageSquare className="h-2.5 w-2.5" /> {parada.observacoes}
-              </p>
+              <div className="mt-1.5 flex items-start gap-1.5 bg-warning/10 border border-warning/30 rounded px-2 py-1">
+                <Badge className="bg-warning text-warning-foreground text-[9px] shrink-0 h-4">OBS</Badge>
+                <p className="text-[11px] text-foreground font-medium leading-tight">{parada.observacoes}</p>
+              </div>
             )}
 
             {/* Action buttons */}
@@ -334,19 +367,24 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
                       <Button size="sm" className="h-6 text-[10px] bg-success hover:bg-success/90 text-success-foreground" onClick={() => marcarEntregue(parada.id)}>
                         <CheckCircle2 className="h-3 w-3 mr-0.5" /> Entregue
                       </Button>
-                      <Button size="sm" variant="destructive" className="h-6 text-[10px]" onClick={() => marcarFalha(parada.id)}>
+                      <Button size="sm" variant="destructive" className="h-6 text-[10px]" onClick={() => setFailOpen(true)}>
                         <XCircle className="h-3 w-3 mr-0.5" /> Falhou
                       </Button>
                     </>
                   )}
                   {(parada.status === 'falhou' || parada.status === 'entregue') && (
-                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => reagendarParada(parada.id)}>
+                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setRescheduleOpen(true)}>
                       <RotateCcw className="h-3 w-3 mr-0.5" /> Reagendar
                     </Button>
                   )}
                 </>
               ) : (
                 <>
+                  {parada.status === 'falhou' && (
+                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setRescheduleOpen(true)}>
+                      <RotateCcw className="h-3 w-3 mr-0.5" /> Reagendar
+                    </Button>
+                  )}
                   {index > 0 && parada.status === 'pendente' && (
                     <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1" onClick={() => reorderParadas(index, 0)}>
                       <ArrowUp className="h-3 w-3" />
@@ -384,6 +422,46 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
         </div>
       </CardContent>
       <EditParadaDialog parada={parada} open={editing} onOpenChange={setEditing} />
+
+      {/* Falha dialog */}
+      <Dialog open={failOpen} onOpenChange={setFailOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Entrega não realizada</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">{parada.nome}</p>
+          <div className="space-y-2 mt-2">
+            <label className="text-xs font-medium">Motivo *</label>
+            <Select value={failMotivo} onValueChange={setFailMotivo}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MOTIVOS.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <label className="text-xs font-medium">Observações</label>
+            <Textarea rows={3} value={failObs} onChange={e => setFailObs(e.target.value)} placeholder="Detalhes adicionais (opcional)" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFailOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={submitFalha}>Registrar falha</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reagendar dialog */}
+      <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reagendar entrega</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">{parada.nome}</p>
+          <div className="space-y-2 mt-2">
+            <label className="text-xs font-medium">Nova data *</label>
+            <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} min={new Date().toISOString().slice(0, 10)} />
+            <p className="text-[10px] text-muted-foreground">A nota original será mantida e a parada será movida para a nova data — sem precisar reimportar.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleOpen(false)}>Cancelar</Button>
+            <Button onClick={submitReagendar}>Reagendar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 });

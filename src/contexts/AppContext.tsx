@@ -28,7 +28,7 @@ interface AppContextType {
   reorderParadas: (fromIndex: number, toIndex: number) => void;
   importParadas: (list: Omit<Parada, 'id' | 'status' | 'produtos'>[]) => Promise<void>;
 
-  addMotorista: (m: Omit<Motorista, 'id' | 'ativo' | 'cor'>) => Promise<void>;
+  addMotorista: (m: Omit<Motorista, 'id' | 'ativo' | 'cor'>) => Promise<Motorista>;
   updateMotorista: (id: string, data: Partial<Motorista>) => Promise<void>;
   removeMotorista: (id: string) => Promise<void>;
 
@@ -41,8 +41,8 @@ interface AppContextType {
   iniciarRota: () => void;
   pararRota: () => void;
   marcarEntregue: (id: string) => Promise<void>;
-  marcarFalha: (id: string) => Promise<void>;
-  reagendarParada: (id: string) => Promise<void>;
+  marcarFalha: (id: string, motivo?: string) => Promise<void>;
+  reagendarParada: (id: string, novaData?: string) => Promise<void>;
 
   distribuirAutomaticamente: () => Promise<void>;
   atribuirParada: (paradaId: string, motoristaId: string | undefined) => Promise<void>;
@@ -249,8 +249,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('addMotorista error', error);
       throw new Error(error.message || 'Falha ao cadastrar motorista');
     }
-    if (data) setMotoristas(prev => [...prev, rowToMotorista(data)]);
+    const novo = rowToMotorista(data!);
+    setMotoristas(prev => [...prev, novo]);
     addAction(`Motorista "${m.nome}" cadastrado`);
+    return novo;
   };
 
   const updateMotorista: AppContextType['updateMotorista'] = async (id, data) => {
@@ -380,24 +382,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addAction(`Entregue: ${parada?.nome || ''}`);
   };
 
-  const marcarFalha = async (id: string) => {
+  const marcarFalha = async (id: string, motivo?: string) => {
     pushUndo(paradas);
     const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    await supabase.from('paradas').update({ status: 'falhou', checkout_time: now }).eq('id', id);
+    await supabase.from('paradas').update({ status: 'falhou', checkout_time: now, motivo_falha: motivo || null }).eq('id', id);
     setParadas(prev => {
       const u = prev.map(p => p.id === id ? { ...p, status: 'falhou' as const, checkoutTime: now } : p);
       const n = u.findIndex(p => p.status === 'pendente' || p.status === 'em_entrega');
       if (n >= 0) setCurrentStopIndex(n);
       return u;
     });
-    addAction(`Falha: ${paradas.find(p => p.id === id)?.nome || ''}`);
+    addAction(`Falha: ${paradas.find(p => p.id === id)?.nome || ''}${motivo ? ` (${motivo})` : ''}`);
   };
 
-  const reagendarParada = async (id: string) => {
+  const reagendarParada = async (id: string, novaData?: string) => {
     pushUndo(paradas);
-    await supabase.from('paradas').update({ status: 'pendente', checkin_time: null, checkout_time: null }).eq('id', id);
+    const upd: any = { status: 'pendente', checkin_time: null, checkout_time: null, motivo_falha: null };
+    if (novaData) upd.data_rota = novaData;
+    await supabase.from('paradas').update(upd).eq('id', id);
     setParadas(prev => prev.map(p => p.id === id ? { ...p, status: 'pendente' as const, checkinTime: undefined, checkoutTime: undefined } : p));
-    addAction(`Reagendada: ${paradas.find(p => p.id === id)?.nome || ''}`);
+    addAction(`Reagendada: ${paradas.find(p => p.id === id)?.nome || ''}${novaData ? ` para ${novaData}` : ''}`);
   };
 
   const distribuirAutomaticamente = async () => {

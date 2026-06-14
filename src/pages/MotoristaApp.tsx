@@ -9,7 +9,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { MapPin, LogOut, CheckCircle2, XCircle, PenLine, Navigation, Phone, Clock, FileText } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MapPin, LogOut, CheckCircle2, XCircle, PenLine, Navigation, Phone, Clock, FileText, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import SignaturePad from '@/components/motorista/SignaturePad';
 import { useGpsTracker } from '@/hooks/useGpsTracker';
@@ -43,7 +44,16 @@ export default function MotoristaApp() {
   const [loading, setLoading] = useState(true);
   const [activeSig, setActiveSig] = useState<Parada | null>(null);
   const [activeFail, setActiveFail] = useState<Parada | null>(null);
-  const [failMotivo, setFailMotivo] = useState('');
+  const [failMotivo, setFailMotivo] = useState('cliente_ausente');
+  const [failObs, setFailObs] = useState('');
+
+  const MOTIVOS_FALHA = [
+    { v: 'cliente_recusou', l: 'Cliente recusou' },
+    { v: 'avaria', l: 'Avaria no produto' },
+    { v: 'cliente_ausente', l: 'Cliente ausente' },
+    { v: 'endereco_incorreto', l: 'Endereço incorreto' },
+    { v: 'outros', l: 'Outros' },
+  ];
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -114,14 +124,16 @@ export default function MotoristaApp() {
   };
 
   const submitFalha = async () => {
-    if (!activeFail || !failMotivo.trim()) { toast.error('Informe o motivo'); return; }
+    if (!activeFail) return;
+    const label = MOTIVOS_FALHA.find(m => m.v === failMotivo)?.l || failMotivo;
+    const motivo = failObs.trim() ? `${label}: ${failObs.trim()}` : label;
     const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const { error } = await supabase.from('paradas')
-      .update({ status: 'nao_realizada', motivo_falha: failMotivo, checkout_time: time })
+      .update({ status: 'nao_realizada', motivo_falha: motivo, checkout_time: time })
       .eq('id', activeFail.id);
     if (error) return toast.error(error.message);
     toast.success('Registrado como não realizada');
-    setActiveFail(null); setFailMotivo('');
+    setActiveFail(null); setFailMotivo('cliente_ausente'); setFailObs('');
     reload();
   };
 
@@ -194,7 +206,12 @@ export default function MotoristaApp() {
                           <span>{[p.endereco, p.municipio, p.uf].filter(Boolean).join(', ')}</span>
                         </p>
                         {p.horario && <p className="text-[11px] text-muted-foreground"><Clock className="h-3 w-3 inline" /> {p.horario}</p>}
-                        {p.observacoes && <p className="text-[11px] text-foreground mt-1 italic">"{p.observacoes}"</p>}
+                        {p.observacoes && (
+                          <div className="mt-1.5 flex items-start gap-1.5 bg-warning/15 border border-warning/40 rounded px-2 py-1">
+                            <Badge className="bg-warning text-warning-foreground text-[9px] shrink-0 h-4">OBS</Badge>
+                            <p className="text-[11px] text-foreground font-semibold leading-tight"><MessageSquare className="h-3 w-3 inline mr-0.5" />{p.observacoes}</p>
+                          </div>
+                        )}
                       </div>
                       {isDone && <CheckCircle2 className="h-5 w-5 text-success shrink-0" />}
                       {isFail && <XCircle className="h-5 w-5 text-destructive shrink-0" />}
@@ -263,15 +280,23 @@ export default function MotoristaApp() {
         />
       )}
 
-      <Dialog open={!!activeFail} onOpenChange={(o) => { if (!o) { setActiveFail(null); setFailMotivo(''); } }}>
+      <Dialog open={!!activeFail} onOpenChange={(o) => { if (!o) { setActiveFail(null); setFailMotivo('cliente_ausente'); setFailObs(''); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Entrega não realizada</DialogTitle></DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">{activeFail?.nome}</p>
-            <Textarea value={failMotivo} onChange={e => setFailMotivo(e.target.value)} placeholder="Descreva o motivo (ex.: cliente ausente, endereço incorreto...)" rows={4} />
+            <label className="text-xs font-medium">Motivo *</label>
+            <Select value={failMotivo} onValueChange={setFailMotivo}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MOTIVOS_FALHA.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <label className="text-xs font-medium">Observações</label>
+            <Textarea value={failObs} onChange={e => setFailObs(e.target.value)} placeholder="Detalhes adicionais (opcional)" rows={3} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setActiveFail(null); setFailMotivo(''); }}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setActiveFail(null); setFailMotivo('cliente_ausente'); setFailObs(''); }}>Cancelar</Button>
             <Button onClick={submitFalha}>Registrar</Button>
           </DialogFooter>
         </DialogContent>
