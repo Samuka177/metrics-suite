@@ -41,8 +41,8 @@ interface AppContextType {
   iniciarRota: () => void;
   pararRota: () => void;
   marcarEntregue: (id: string) => Promise<void>;
-  marcarFalha: (id: string) => Promise<void>;
-  reagendarParada: (id: string) => Promise<void>;
+  marcarFalha: (id: string, motivo?: string) => Promise<void>;
+  reagendarParada: (id: string, novaData?: string) => Promise<void>;
 
   distribuirAutomaticamente: () => Promise<void>;
   atribuirParada: (paradaId: string, motoristaId: string | undefined) => Promise<void>;
