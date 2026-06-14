@@ -28,7 +28,7 @@ interface AppContextType {
   reorderParadas: (fromIndex: number, toIndex: number) => void;
   importParadas: (list: Omit<Parada, 'id' | 'status' | 'produtos'>[]) => Promise<void>;
 
-  addMotorista: (m: Omit<Motorista, 'id' | 'ativo' | 'cor'>) => Promise<void>;
+  addMotorista: (m: Omit<Motorista, 'id' | 'ativo' | 'cor'>) => Promise<Motorista>;
   updateMotorista: (id: string, data: Partial<Motorista>) => Promise<void>;
   removeMotorista: (id: string) => Promise<void>;
 
