@@ -212,6 +212,7 @@ export default function MotoristaApp() {
                             <p className="text-[11px] text-foreground font-semibold leading-tight"><MessageSquare className="h-3 w-3 inline mr-0.5" />{p.observacoes}</p>
                           </div>
                         )}
+                      </div>
                       {isDone && <CheckCircle2 className="h-5 w-5 text-success shrink-0" />}
                       {isFail && <XCircle className="h-5 w-5 text-destructive shrink-0" />}
                     </div>
