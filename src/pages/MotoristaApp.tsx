@@ -124,14 +124,16 @@ export default function MotoristaApp() {
   };
 
   const submitFalha = async () => {
-    if (!activeFail || !failMotivo.trim()) { toast.error('Informe o motivo'); return; }
+    if (!activeFail) return;
+    const label = MOTIVOS_FALHA.find(m => m.v === failMotivo)?.l || failMotivo;
+    const motivo = failObs.trim() ? `${label}: ${failObs.trim()}` : label;
     const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const { error } = await supabase.from('paradas')
-      .update({ status: 'nao_realizada', motivo_falha: failMotivo, checkout_time: time })
+      .update({ status: 'nao_realizada', motivo_falha: motivo, checkout_time: time })
       .eq('id', activeFail.id);
     if (error) return toast.error(error.message);
     toast.success('Registrado como não realizada');
-    setActiveFail(null); setFailMotivo('');
+    setActiveFail(null); setFailMotivo('cliente_ausente'); setFailObs('');
     reload();
   };
 
