@@ -382,24 +382,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addAction(`Entregue: ${parada?.nome || ''}`);
   };
 
-  const marcarFalha = async (id: string) => {
+  const marcarFalha = async (id: string, motivo?: string) => {
     pushUndo(paradas);
     const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    await supabase.from('paradas').update({ status: 'falhou', checkout_time: now }).eq('id', id);
+    await supabase.from('paradas').update({ status: 'falhou', checkout_time: now, motivo_falha: motivo || null }).eq('id', id);
     setParadas(prev => {
       const u = prev.map(p => p.id === id ? { ...p, status: 'falhou' as const, checkoutTime: now } : p);
       const n = u.findIndex(p => p.status === 'pendente' || p.status === 'em_entrega');
       if (n >= 0) setCurrentStopIndex(n);
       return u;
     });
-    addAction(`Falha: ${paradas.find(p => p.id === id)?.nome || ''}`);
+    addAction(`Falha: ${paradas.find(p => p.id === id)?.nome || ''}${motivo ? ` (${motivo})` : ''}`);
   };
 
-  const reagendarParada = async (id: string) => {
+  const reagendarParada = async (id: string, novaData?: string) => {
     pushUndo(paradas);
-    await supabase.from('paradas').update({ status: 'pendente', checkin_time: null, checkout_time: null }).eq('id', id);
+    const upd: any = { status: 'pendente', checkin_time: null, checkout_time: null, motivo_falha: null };
+    if (novaData) upd.data_rota = novaData;
+    await supabase.from('paradas').update(upd).eq('id', id);
     setParadas(prev => prev.map(p => p.id === id ? { ...p, status: 'pendente' as const, checkinTime: undefined, checkoutTime: undefined } : p));
-    addAction(`Reagendada: ${paradas.find(p => p.id === id)?.nome || ''}`);
+    addAction(`Reagendada: ${paradas.find(p => p.id === id)?.nome || ''}${novaData ? ` para ${novaData}` : ''}`);
   };
 
   const distribuirAutomaticamente = async () => {
