@@ -249,8 +249,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('addMotorista error', error);
       throw new Error(error.message || 'Falha ao cadastrar motorista');
     }
-    if (data) setMotoristas(prev => [...prev, rowToMotorista(data)]);
+    const novo = rowToMotorista(data!);
+    setMotoristas(prev => [...prev, novo]);
     addAction(`Motorista "${m.nome}" cadastrado`);
+    return novo;
   };
 
   const updateMotorista: AppContextType['updateMotorista'] = async (id, data) => {
