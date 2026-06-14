@@ -44,7 +44,16 @@ export default function MotoristaApp() {
   const [loading, setLoading] = useState(true);
   const [activeSig, setActiveSig] = useState<Parada | null>(null);
   const [activeFail, setActiveFail] = useState<Parada | null>(null);
-  const [failMotivo, setFailMotivo] = useState('');
+  const [failMotivo, setFailMotivo] = useState('cliente_ausente');
+  const [failObs, setFailObs] = useState('');
+
+  const MOTIVOS_FALHA = [
+    { v: 'cliente_recusou', l: 'Cliente recusou' },
+    { v: 'avaria', l: 'Avaria no produto' },
+    { v: 'cliente_ausente', l: 'Cliente ausente' },
+    { v: 'endereco_incorreto', l: 'Endereço incorreto' },
+    { v: 'outros', l: 'Outros' },
+  ];
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
