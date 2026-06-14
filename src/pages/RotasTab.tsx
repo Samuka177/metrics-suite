@@ -352,9 +352,10 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
             </div>
 
             {parada.observacoes && (
-              <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5">
-                <MessageSquare className="h-2.5 w-2.5" /> {parada.observacoes}
-              </p>
+              <div className="mt-1.5 flex items-start gap-1.5 bg-warning/10 border border-warning/30 rounded px-2 py-1">
+                <Badge className="bg-warning text-warning-foreground text-[9px] shrink-0 h-4">OBS</Badge>
+                <p className="text-[11px] text-foreground font-medium leading-tight">{parada.observacoes}</p>
+              </div>
             )}
 
             {/* Action buttons */}
@@ -366,19 +367,24 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
                       <Button size="sm" className="h-6 text-[10px] bg-success hover:bg-success/90 text-success-foreground" onClick={() => marcarEntregue(parada.id)}>
                         <CheckCircle2 className="h-3 w-3 mr-0.5" /> Entregue
                       </Button>
-                      <Button size="sm" variant="destructive" className="h-6 text-[10px]" onClick={() => marcarFalha(parada.id)}>
+                      <Button size="sm" variant="destructive" className="h-6 text-[10px]" onClick={() => setFailOpen(true)}>
                         <XCircle className="h-3 w-3 mr-0.5" /> Falhou
                       </Button>
                     </>
                   )}
                   {(parada.status === 'falhou' || parada.status === 'entregue') && (
-                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => reagendarParada(parada.id)}>
+                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setRescheduleOpen(true)}>
                       <RotateCcw className="h-3 w-3 mr-0.5" /> Reagendar
                     </Button>
                   )}
                 </>
               ) : (
                 <>
+                  {parada.status === 'falhou' && (
+                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setRescheduleOpen(true)}>
+                      <RotateCcw className="h-3 w-3 mr-0.5" /> Reagendar
+                    </Button>
+                  )}
                   {index > 0 && parada.status === 'pendente' && (
                     <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1" onClick={() => reorderParadas(index, 0)}>
                       <ArrowUp className="h-3 w-3" />
