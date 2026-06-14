@@ -280,15 +280,23 @@ export default function MotoristaApp() {
         />
       )}
 
-      <Dialog open={!!activeFail} onOpenChange={(o) => { if (!o) { setActiveFail(null); setFailMotivo(''); } }}>
+      <Dialog open={!!activeFail} onOpenChange={(o) => { if (!o) { setActiveFail(null); setFailMotivo('cliente_ausente'); setFailObs(''); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Entrega não realizada</DialogTitle></DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">{activeFail?.nome}</p>
-            <Textarea value={failMotivo} onChange={e => setFailMotivo(e.target.value)} placeholder="Descreva o motivo (ex.: cliente ausente, endereço incorreto...)" rows={4} />
+            <label className="text-xs font-medium">Motivo *</label>
+            <Select value={failMotivo} onValueChange={setFailMotivo}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MOTIVOS_FALHA.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <label className="text-xs font-medium">Observações</label>
+            <Textarea value={failObs} onChange={e => setFailObs(e.target.value)} placeholder="Detalhes adicionais (opcional)" rows={3} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setActiveFail(null); setFailMotivo(''); }}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setActiveFail(null); setFailMotivo('cliente_ausente'); setFailObs(''); }}>Cancelar</Button>
             <Button onClick={submitFalha}>Registrar</Button>
           </DialogFooter>
         </DialogContent>
