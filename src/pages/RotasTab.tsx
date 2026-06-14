@@ -259,10 +259,42 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
 }) => {
   const { updateParada, removeParada, reorderParadas, marcarEntregue, marcarFalha, reagendarParada, atribuirParada, executionMode, paradas } = useApp();
   const [editing, setEditing] = useState(false);
+  const [failOpen, setFailOpen] = useState(false);
+  const [failMotivo, setFailMotivo] = useState<string>('cliente_ausente');
+  const [failObs, setFailObs] = useState('');
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [novaData, setNovaData] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
   const st = statusConfig[parada.status];
   const motorista = motoristas.find(m => m.id === parada.motoristaId);
 
   const capacityWarning = (parada.peso && parada.peso > 50) || (parada.volume && parada.volume > 1);
+
+  const MOTIVOS = [
+    { v: 'cliente_recusou', l: 'Cliente recusou' },
+    { v: 'avaria', l: 'Avaria no produto' },
+    { v: 'cliente_ausente', l: 'Cliente ausente' },
+    { v: 'endereco_incorreto', l: 'Endereço incorreto' },
+    { v: 'outros', l: 'Outros' },
+  ];
+
+  const submitFalha = async () => {
+    const label = MOTIVOS.find(m => m.v === failMotivo)?.l || failMotivo;
+    const motivo = failObs ? `${label}: ${failObs}` : label;
+    await marcarFalha(parada.id, motivo);
+    setFailOpen(false); setFailObs('');
+    toast.success('Entrega marcada como falha');
+  };
+
+  const submitReagendar = async () => {
+    if (!novaData) return toast.error('Selecione a nova data');
+    await reagendarParada(parada.id, novaData);
+    setRescheduleOpen(false);
+    toast.success(`Entrega reagendada para ${new Date(novaData + 'T00:00').toLocaleDateString('pt-BR')}`);
+  };
+
 
   return (
     <Card className={`transition-all ${isActive ? 'ring-2 ring-primary shadow-lg' : ''} ${parada.status === 'falhou' ? 'border-destructive/50' : ''} ${capacityWarning ? 'border-warning/50' : ''}`}>
