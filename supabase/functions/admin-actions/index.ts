@@ -26,14 +26,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Verificar super_admin
-    const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', user.id);
-    if (!roles?.some(r => r.role === 'super_admin')) {
-      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
-    }
-
     const body = await req.json();
     const { action } = body;
+
+    // Verificar permissão: super_admin sempre; algumas ações também permitem admin da empresa
+    const { data: roles } = await admin.from('user_roles').select('role, company_id').eq('user_id', user.id);
+    const isSuper = roles?.some((r: any) => r.role === 'super_admin');
+    const isCompanyAdmin = (cid: string) => roles?.some((r: any) => r.role === 'admin' && r.company_id === cid);
+
+    const motoristaActions = new Set(['create_motorista_user', 'reset_motorista_password']);
+    if (!isSuper && !(motoristaActions.has(action) && body.company_id && isCompanyAdmin(body.company_id))) {
+      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
+    }
 
     if (action === 'create_company_with_admin') {
       const { company_name, email_domain, admin_email, admin_password, admin_name } = body;
