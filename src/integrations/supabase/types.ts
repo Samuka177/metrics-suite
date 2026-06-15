@@ -311,6 +311,128 @@ export type Database = {
           },
         ]
       }
+      notificacoes_motorista: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          lida: boolean
+          mensagem: string
+          motorista_id: string
+          parada_id: string | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          lida?: boolean
+          mensagem: string
+          motorista_id: string
+          parada_id?: string | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          lida?: boolean
+          mensagem?: string
+          motorista_id?: string
+          parada_id?: string | null
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_motorista_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_motorista_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_motorista_parada_id_fkey"
+            columns: ["parada_id"]
+            isOneToOne: false
+            referencedRelation: "paradas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parada_eventos: {
+        Row: {
+          company_id: string
+          created_at: string
+          event_type: string
+          id: string
+          motivo: string | null
+          motorista_id: string | null
+          nova_data: string | null
+          observacao: string | null
+          parada_id: string
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          motivo?: string | null
+          motorista_id?: string | null
+          nova_data?: string | null
+          observacao?: string | null
+          parada_id: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          motivo?: string | null
+          motorista_id?: string | null
+          nova_data?: string | null
+          observacao?: string | null
+          parada_id?: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parada_eventos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parada_eventos_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parada_eventos_parada_id_fkey"
+            columns: ["parada_id"]
+            isOneToOne: false
+            referencedRelation: "paradas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       paradas: {
         Row: {
           assinatura_url: string | null

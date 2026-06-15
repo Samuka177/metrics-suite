@@ -41,7 +41,7 @@ interface AppContextType {
   iniciarRota: () => void;
   pararRota: () => void;
   marcarEntregue: (id: string) => Promise<void>;
-  marcarFalha: (id: string, motivo?: string) => Promise<void>;
+  marcarFalha: (id: string, motivo?: string, observacao?: string) => Promise<void>;
   reagendarParada: (id: string, novaData?: string) => Promise<void>;
 
   distribuirAutomaticamente: () => Promise<void>;
@@ -382,9 +382,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addAction(`Entregue: ${parada?.nome || ''}`);
   };
 
-  const marcarFalha = async (id: string, motivo?: string) => {
+  const marcarFalha = async (id: string, motivo?: string, observacao?: string) => {
     pushUndo(paradas);
     const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const parada = paradas.find(p => p.id === id);
     await supabase.from('paradas').update({ status: 'falhou', checkout_time: now, motivo_falha: motivo || null }).eq('id', id);
     setParadas(prev => {
       const u = prev.map(p => p.id === id ? { ...p, status: 'falhou' as const, checkoutTime: now } : p);
@@ -392,17 +393,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (n >= 0) setCurrentStopIndex(n);
       return u;
     });
-    addAction(`Falha: ${paradas.find(p => p.id === id)?.nome || ''}${motivo ? ` (${motivo})` : ''}`);
+
+    // Auditoria
+    if (companyId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('parada_eventos').insert({
+        company_id: companyId, parada_id: id, motorista_id: parada?.motoristaId || null,
+        event_type: 'falha', motivo: motivo || null, observacao: observacao || null,
+        user_id: user?.id || null, user_email: user?.email || null,
+      });
+      // Notificação ao motorista
+      if (parada?.motoristaId) {
+        await supabase.from('notificacoes_motorista').insert({
+          company_id: companyId, motorista_id: parada.motoristaId, parada_id: id,
+          tipo: 'falha',
+          titulo: `Entrega marcada como falha: ${parada.nome}`,
+          mensagem: `Motivo: ${motivo || 'não informado'}${observacao ? ` — ${observacao}` : ''}`,
+        });
+      }
+    }
+    addAction(`Falha: ${parada?.nome || ''}${motivo ? ` (${motivo})` : ''}`);
   };
 
   const reagendarParada = async (id: string, novaData?: string) => {
     pushUndo(paradas);
+    const parada = paradas.find(p => p.id === id);
+    const motivoAnterior = parada?.status === 'falhou' ? 'reagendamento pós-falha' : 'reagendamento';
     const upd: any = { status: 'pendente', checkin_time: null, checkout_time: null, motivo_falha: null };
     if (novaData) upd.data_rota = novaData;
     await supabase.from('paradas').update(upd).eq('id', id);
     setParadas(prev => prev.map(p => p.id === id ? { ...p, status: 'pendente' as const, checkinTime: undefined, checkoutTime: undefined } : p));
-    addAction(`Reagendada: ${paradas.find(p => p.id === id)?.nome || ''}${novaData ? ` para ${novaData}` : ''}`);
+
+    if (companyId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('parada_eventos').insert({
+        company_id: companyId, parada_id: id, motorista_id: parada?.motoristaId || null,
+        event_type: 'reagendamento', motivo: motivoAnterior,
+        nova_data: novaData || null,
+        user_id: user?.id || null, user_email: user?.email || null,
+      });
+      if (parada?.motoristaId) {
+        await supabase.from('notificacoes_motorista').insert({
+          company_id: companyId, motorista_id: parada.motoristaId, parada_id: id,
+          tipo: 'reagendamento',
+          titulo: `Entrega reagendada: ${parada.nome}`,
+          mensagem: novaData ? `Nova data: ${novaData}` : 'Reagendada (data não alterada)',
+        });
+      }
+    }
+    addAction(`Reagendada: ${parada?.nome || ''}${novaData ? ` para ${novaData}` : ''}`);
   };
+
 
   const distribuirAutomaticamente = async () => {
     pushUndo(paradas);

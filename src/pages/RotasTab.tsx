@@ -282,11 +282,11 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
 
   const submitFalha = async () => {
     const label = MOTIVOS.find(m => m.v === failMotivo)?.l || failMotivo;
-    const motivo = failObs ? `${label}: ${failObs}` : label;
-    await marcarFalha(parada.id, motivo);
+    await marcarFalha(parada.id, label, failObs || undefined);
     setFailOpen(false); setFailObs('');
     toast.success('Entrega marcada como falha');
   };
+
 
   const submitReagendar = async () => {
     if (!novaData) return toast.error('Selecione a nova data');
