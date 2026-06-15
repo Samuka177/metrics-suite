@@ -46,6 +46,8 @@ export default function MotoristaApp() {
   const [activeFail, setActiveFail] = useState<Parada | null>(null);
   const [failMotivo, setFailMotivo] = useState('cliente_ausente');
   const [failObs, setFailObs] = useState('');
+  const [notifs, setNotifs] = useState<{ id: string; tipo: string; titulo: string; mensagem: string; lida: boolean; created_at: string }[]>([]);
+
 
   const MOTIVOS_FALHA = [
     { v: 'cliente_recusou', l: 'Cliente recusou' },
@@ -91,6 +93,35 @@ export default function MotoristaApp() {
     companyId: paradas[0]?.company_id || null,
     intervalMs: 30000,
   });
+
+  // Notificações para o motorista (reagendamentos/falhas)
+  useEffect(() => {
+    if (!motoristaId) return;
+    const load = async () => {
+      const { data } = await supabase.from('notificacoes_motorista')
+        .select('id, tipo, titulo, mensagem, lida, created_at')
+        .eq('motorista_id', motoristaId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      const list = (data || []) as any[];
+      setNotifs(list);
+      list.filter(n => !n.lida).forEach(n => toast.message(n.titulo, { description: n.mensagem }));
+      const unreadIds = list.filter(n => !n.lida).map(n => n.id);
+      if (unreadIds.length) await supabase.from('notificacoes_motorista').update({ lida: true }).in('id', unreadIds);
+    };
+    load();
+    const ch = supabase.channel(`notif-${motoristaId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notificacoes_motorista', filter: `motorista_id=eq.${motoristaId}` },
+        (payload: any) => {
+          const n = payload.new;
+          setNotifs(prev => [n, ...prev]);
+          toast.message(n.titulo, { description: n.mensagem });
+          supabase.from('notificacoes_motorista').update({ lida: true }).eq('id', n.id);
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [motoristaId]);
+
 
   const reload = async () => {
     if (!motoristaId) return;
