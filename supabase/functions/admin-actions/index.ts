@@ -167,9 +167,17 @@ Deno.serve(async (req) => {
       if (!company_id || !motorista_id || !email || !password) {
         return new Response(JSON.stringify({ error: 'missing fields' }), { status: 400, headers: corsHeaders });
       }
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRe.test(String(email))) {
+        return new Response(JSON.stringify({ error: 'e-mail inválido' }), { status: 400, headers: corsHeaders });
+      }
+      if (!full_name || String(full_name).trim().length < 3) {
+        return new Response(JSON.stringify({ error: 'nome deve ter ao menos 3 caracteres' }), { status: 400, headers: corsHeaders });
+      }
       if (String(password).length < 6) {
         return new Response(JSON.stringify({ error: 'senha deve ter ao menos 6 caracteres' }), { status: 400, headers: corsHeaders });
       }
+
       const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
       let authUser = list.users.find((u: any) => u.email?.toLowerCase() === String(email).toLowerCase());
       if (!authUser) {
