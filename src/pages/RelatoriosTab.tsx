@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   BarChart3, TrendingUp, Package, Truck, Users, Clock,
-  CheckCircle2, AlertTriangle, Timer, MapPin, Download, FileSpreadsheet, FileText
+  CheckCircle2, AlertTriangle, Timer, MapPin, Download, FileSpreadsheet, FileText, XCircle
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,6 +16,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+
 
 const COLORS = {
   primary: 'hsl(36, 78%, 41%)',
@@ -63,8 +67,81 @@ function isToday(dateStr?: string): boolean {
 
 export default function RelatoriosTab() {
   const { paradas, motoristas } = useApp();
+  const { profile } = useAuth();
   const [periodo, setPeriodo] = useState<Periodo>('todos');
   const [motoristaFiltro, setMotoristaFiltro] = useState<string>('todos');
+
+  // Falhas (consultadas no banco para abranger histórico)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const [falhaInicio, setFalhaInicio] = useState<string>(monthAgo);
+  const [falhaFim, setFalhaFim] = useState<string>(todayStr);
+  const [falhaMotorista, setFalhaMotorista] = useState<string>('todos');
+  const [falhas, setFalhas] = useState<any[]>([]);
+  const [loadingFalhas, setLoadingFalhas] = useState(false);
+
+  const carregarFalhas = async () => {
+    if (!profile?.company_id) return;
+    setLoadingFalhas(true);
+    let q = supabase.from('paradas')
+      .select('id, nome, endereco, municipio, uf, motivo_falha, checkout_time, data_rota, motorista_id, created_at')
+      .eq('company_id', profile.company_id)
+      .eq('status', 'falhou')
+      .gte('data_rota', falhaInicio)
+      .lte('data_rota', falhaFim)
+      .order('data_rota', { ascending: false });
+    if (falhaMotorista !== 'todos') q = q.eq('motorista_id', falhaMotorista);
+    const { data, error } = await q;
+    if (error) toast.error(error.message);
+    setFalhas(data || []);
+    setLoadingFalhas(false);
+  };
+
+  useEffect(() => { carregarFalhas(); }, [profile?.company_id]);
+
+  const motoristaNome = (id?: string | null) => motoristas.find(m => m.id === id)?.nome || '—';
+
+  const falhaRows = () => falhas.map((f, i) => ({
+    '#': i + 1,
+    'Data': f.data_rota || '—',
+    'Cliente': f.nome,
+    'Endereço': [f.endereco, f.municipio, f.uf].filter(Boolean).join(', '),
+    'Motorista': motoristaNome(f.motorista_id),
+    'Motivo': f.motivo_falha || '—',
+    'Hora': f.checkout_time || '—',
+  }));
+
+  const exportFalhasXLSX = () => {
+    const rows = falhaRows();
+    if (!rows.length) return toast.error('Nenhuma falha no período');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Falhas');
+    XLSX.writeFile(wb, `falhas_${falhaInicio}_a_${falhaFim}.xlsx`);
+    toast.success('Exportado!');
+  };
+
+  const exportFalhasCSV = () => {
+    const rows = falhaRows();
+    if (!rows.length) return toast.error('Nenhuma falha no período');
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `falhas_${falhaInicio}_a_${falhaFim}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Exportado!');
+  };
+
+  const falhasPorMotivo = useMemo(() => {
+    const map: Record<string, number> = {};
+    falhas.forEach(f => {
+      const k = (f.motivo_falha || 'Não informado').split(':')[0].trim();
+      map[k] = (map[k] || 0) + 1;
+    });
+    return Object.entries(map).map(([nome, qtd]) => ({ nome, qtd }));
+  }, [falhas]);
+
 
   // Filter paradas — currently all data is "today" since localStorage
   const paradasFiltradas = useMemo(() => {
