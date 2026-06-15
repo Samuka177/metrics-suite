@@ -533,7 +533,75 @@ export default function RelatoriosTab() {
       </Card>
 
       {/* Detailed Stop List */}
+      {/* Falhas — auditoria e exportação */}
+      <SectionTitle icon={XCircle} title="Entregas com falha — exportar" />
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div>
+              <label className="text-[10px] text-muted-foreground">Início</label>
+              <Input type="date" value={falhaInicio} onChange={e => setFalhaInicio(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">Fim</label>
+              <Input type="date" value={falhaFim} onChange={e => setFalhaFim(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">Motorista</label>
+              <Select value={falhaMotorista} onValueChange={setFalhaMotorista}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {motoristas.map(m => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button size="sm" className="h-8 text-xs w-full" onClick={carregarFalhas} disabled={loadingFalhas}>
+                {loadingFalhas ? 'Carregando...' : 'Aplicar filtros'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge variant="secondary">{falhas.length} falha(s)</Badge>
+            {falhasPorMotivo.map(m => (
+              <Badge key={m.nome} variant="outline" className="text-[10px]">{m.nome}: {m.qtd}</Badge>
+            ))}
+            <div className="ml-auto flex gap-1">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportFalhasCSV}>
+                <Download className="h-3.5 w-3.5 mr-1" /> CSV
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportFalhasXLSX}>
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-1" /> XLSX
+              </Button>
+            </div>
+          </div>
+
+          {falhas.length > 0 && (
+            <div className="max-h-64 overflow-y-auto border rounded-md text-xs">
+              <table className="w-full">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr><th className="text-left p-2">Data</th><th className="text-left p-2">Cliente</th><th className="text-left p-2">Motorista</th><th className="text-left p-2">Motivo</th></tr>
+                </thead>
+                <tbody>
+                  {falhas.map(f => (
+                    <tr key={f.id} className="border-t">
+                      <td className="p-2 whitespace-nowrap">{f.data_rota}</td>
+                      <td className="p-2">{f.nome}</td>
+                      <td className="p-2">{motoristaNome(f.motorista_id)}</td>
+                      <td className="p-2 text-destructive">{f.motivo_falha || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <SectionTitle icon={MapPin} title="Detalhamento das Paradas" />
+
       <div className="space-y-2">
         {paradasFiltradas.map((p, i) => (
           <Card key={p.id} className="fade-in">
