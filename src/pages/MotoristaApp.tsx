@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MapPin, LogOut, CheckCircle2, XCircle, PenLine, Navigation, Phone, Clock, FileText, MessageSquare } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MapPin, LogOut, CheckCircle2, XCircle, PenLine, Navigation, Phone, Clock, FileText, MessageSquare, Play, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import SignaturePad from '@/components/motorista/SignaturePad';
 import { useGpsTracker } from '@/hooks/useGpsTracker';
@@ -173,9 +174,40 @@ export default function MotoristaApp() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
-  const openInMaps = (p: Parada) => {
-    const q = p.lat && p.lng ? `${p.lat},${p.lng}` : encodeURIComponent(`${p.endereco || ''}, ${p.municipio || ''} ${p.uf || ''}`);
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${q}`, '_blank');
+  const addressOf = (p: Parada) =>
+    p.lat && p.lng
+      ? `${p.lat},${p.lng}`
+      : [p.endereco, p.municipio, p.uf].filter(Boolean).join(', ');
+
+  // Rota completa: apenas paradas ainda pendentes/em andamento, na ordem
+  const remainingStops = paradas.filter(p => p.status === 'pendente' || p.status === 'em_andamento');
+
+  const startFullRouteGoogle = () => {
+    if (remainingStops.length === 0) {
+      toast.info('Nenhuma parada pendente para navegar');
+      return;
+    }
+    const stops = remainingStops.map(addressOf).map(encodeURIComponent);
+    const destination = stops[stops.length - 1];
+    const waypoints = stops.slice(0, -1).join('|');
+    const url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${destination}` +
+      (waypoints ? `&waypoints=${waypoints}` : '');
+    window.open(url, '_blank');
+  };
+
+  const startFullRouteWaze = () => {
+    // Waze não suporta múltiplos waypoints — abre a próxima parada pendente
+    const next = remainingStops[0];
+    if (!next) { toast.info('Nenhuma parada pendente'); return; }
+    const q = next.lat && next.lng
+      ? `ll=${next.lat},${next.lng}`
+      : `q=${encodeURIComponent(addressOf(next))}`;
+    window.open(`https://waze.com/ul?${q}&navigate=yes`, '_blank');
+    if (remainingStops.length > 1) {
+      toast.message('Waze aberto para a próxima parada', {
+        description: 'Waze não permite múltiplos destinos — repita ao concluir cada entrega.',
+      });
+    }
   };
 
   if (loading) {
@@ -208,16 +240,57 @@ export default function MotoristaApp() {
       </header>
 
       <main className="flex-1 overflow-y-auto p-3 space-y-3 pb-6">
+        {/* Boas-vindas + resumo + iniciar rota completa */}
+        <Card className="bg-gradient-to-br from-primary/15 to-secondary/10 border-primary/30">
+          <CardContent className="p-4 space-y-3">
+            <div>
+              <p className="text-lg font-bold text-foreground">Bem-vindo, {motoristaNome.split(' ')[0]}! 👋</p>
+              <p className="text-xs text-muted-foreground">
+                {format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p>
+                <p className="text-xl font-bold text-foreground flex items-center justify-center gap-1">
+                  <Package className="h-4 w-4 text-primary" /> {paradas.length}
+                </p>
+              </div>
+              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pendentes</p>
+                <p className="text-xl font-bold text-primary">{pendentes}</p>
+              </div>
+              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Entregues</p>
+                <p className="text-xl font-bold text-success">{concluidas}</p>
+              </div>
+            </div>
+            {remainingStops.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="lg" className="w-full h-11 text-base font-semibold">
+                    <Play className="h-4 w-4 mr-2" /> Iniciar rota ({remainingStops.length} paradas)
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                  <DropdownMenuItem onClick={startFullRouteGoogle}>
+                    <Navigation className="h-4 w-4 mr-2" /> Google Maps (rota completa)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={startFullRouteWaze}>
+                    <Navigation className="h-4 w-4 mr-2" /> Waze (próxima parada)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </CardContent>
+        </Card>
+
         {paradas.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
             Nenhuma parada atribuída hoje.
           </CardContent></Card>
         ) : (
           <>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary">{pendentes} pendentes</Badge>
-              <Badge className="bg-success text-success-foreground">{concluidas} entregues</Badge>
-            </div>
 
             {paradas.map((p, idx) => {
               const isDone = p.status === 'entregue';
@@ -249,9 +322,6 @@ export default function MotoristaApp() {
                     </div>
 
                     <div className="flex flex-wrap gap-1.5">
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openInMaps(p)}>
-                        <Navigation className="h-3 w-3 mr-1" /> Mapa
-                      </Button>
                       {p.telefone && (
                         <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
                           <a href={`tel:${p.telefone}`}><Phone className="h-3 w-3 mr-1" /> Ligar</a>
