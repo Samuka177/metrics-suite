@@ -174,9 +174,40 @@ export default function MotoristaApp() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
-  const openInMaps = (p: Parada) => {
-    const q = p.lat && p.lng ? `${p.lat},${p.lng}` : encodeURIComponent(`${p.endereco || ''}, ${p.municipio || ''} ${p.uf || ''}`);
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${q}`, '_blank');
+  const addressOf = (p: Parada) =>
+    p.lat && p.lng
+      ? `${p.lat},${p.lng}`
+      : [p.endereco, p.municipio, p.uf].filter(Boolean).join(', ');
+
+  // Rota completa: apenas paradas ainda pendentes/em andamento, na ordem
+  const remainingStops = paradas.filter(p => p.status === 'pendente' || p.status === 'em_andamento');
+
+  const startFullRouteGoogle = () => {
+    if (remainingStops.length === 0) {
+      toast.info('Nenhuma parada pendente para navegar');
+      return;
+    }
+    const stops = remainingStops.map(addressOf).map(encodeURIComponent);
+    const destination = stops[stops.length - 1];
+    const waypoints = stops.slice(0, -1).join('|');
+    const url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${destination}` +
+      (waypoints ? `&waypoints=${waypoints}` : '');
+    window.open(url, '_blank');
+  };
+
+  const startFullRouteWaze = () => {
+    // Waze não suporta múltiplos waypoints — abre a próxima parada pendente
+    const next = remainingStops[0];
+    if (!next) { toast.info('Nenhuma parada pendente'); return; }
+    const q = next.lat && next.lng
+      ? `ll=${next.lat},${next.lng}`
+      : `q=${encodeURIComponent(addressOf(next))}`;
+    window.open(`https://waze.com/ul?${q}&navigate=yes`, '_blank');
+    if (remainingStops.length > 1) {
+      toast.message('Waze aberto para a próxima parada', {
+        description: 'Waze não permite múltiplos destinos — repita ao concluir cada entrega.',
+      });
+    }
   };
 
   if (loading) {
