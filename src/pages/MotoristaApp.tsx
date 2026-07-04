@@ -240,16 +240,57 @@ export default function MotoristaApp() {
       </header>
 
       <main className="flex-1 overflow-y-auto p-3 space-y-3 pb-6">
+        {/* Boas-vindas + resumo + iniciar rota completa */}
+        <Card className="bg-gradient-to-br from-primary/15 to-secondary/10 border-primary/30">
+          <CardContent className="p-4 space-y-3">
+            <div>
+              <p className="text-lg font-bold text-foreground">Bem-vindo, {motoristaNome.split(' ')[0]}! 👋</p>
+              <p className="text-xs text-muted-foreground">
+                {format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p>
+                <p className="text-xl font-bold text-foreground flex items-center justify-center gap-1">
+                  <Package className="h-4 w-4 text-primary" /> {paradas.length}
+                </p>
+              </div>
+              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pendentes</p>
+                <p className="text-xl font-bold text-primary">{pendentes}</p>
+              </div>
+              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Entregues</p>
+                <p className="text-xl font-bold text-success">{concluidas}</p>
+              </div>
+            </div>
+            {remainingStops.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="lg" className="w-full h-11 text-base font-semibold">
+                    <Play className="h-4 w-4 mr-2" /> Iniciar rota ({remainingStops.length} paradas)
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                  <DropdownMenuItem onClick={startFullRouteGoogle}>
+                    <Navigation className="h-4 w-4 mr-2" /> Google Maps (rota completa)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={startFullRouteWaze}>
+                    <Navigation className="h-4 w-4 mr-2" /> Waze (próxima parada)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </CardContent>
+        </Card>
+
         {paradas.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
             Nenhuma parada atribuída hoje.
           </CardContent></Card>
         ) : (
           <>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary">{pendentes} pendentes</Badge>
-              <Badge className="bg-success text-success-foreground">{concluidas} entregues</Badge>
-            </div>
 
             {paradas.map((p, idx) => {
               const isDone = p.status === 'entregue';
