@@ -322,9 +322,6 @@ export default function MotoristaApp() {
                     </div>
 
                     <div className="flex flex-wrap gap-1.5">
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openInMaps(p)}>
-                        <Navigation className="h-3 w-3 mr-1" /> Mapa
-                      </Button>
                       {p.telefone && (
                         <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
                           <a href={`tel:${p.telefone}`}><Phone className="h-3 w-3 mr-1" /> Ligar</a>
