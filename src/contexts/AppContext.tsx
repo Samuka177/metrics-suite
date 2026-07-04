@@ -192,6 +192,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (data.produtos !== undefined) dbData.produtos = data.produtos;
     await supabase.from('paradas').update(dbData).eq('id', id);
     setParadas(prev => calcETAs(prev.map(p => p.id === id ? { ...p, ...data } : p), config.velocidadeMedia));
+
+    // Re-geocodifica quando o endereço mudou e coordenadas não foram fornecidas
+    if (data.endereco !== undefined && data.lat === undefined && data.lng === undefined) {
+      const coords = await geocodeAddress(data.endereco);
+      if (coords) {
+        await supabase.from('paradas').update({ lat: coords.lat, lng: coords.lng }).eq('id', id);
+        setParadas(prev => calcETAs(prev.map(p => p.id === id ? { ...p, ...coords } : p), config.velocidadeMedia));
+      }
+    }
   };
 
   const removeParada: AppContextType['removeParada'] = async (id) => {
