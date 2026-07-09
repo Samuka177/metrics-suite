@@ -241,34 +241,54 @@ export default function MotoristaApp() {
 
       <main className="flex-1 overflow-y-auto p-3 space-y-3 pb-6">
         {/* Boas-vindas + resumo + iniciar rota completa */}
-        <Card className="bg-gradient-to-br from-primary/15 to-secondary/10 border-primary/30">
-          <CardContent className="p-4 space-y-3">
-            <div>
-              <p className="text-lg font-bold text-foreground">Bem-vindo, {motoristaNome.split(' ')[0]}! 👋</p>
+        <Card className="bg-gradient-to-br from-primary/20 to-secondary/15 border-primary/40 shadow-lg">
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-0.5">
+              <p className="text-xl font-bold text-foreground">Bem-vindo, {motoristaNome.split(' ')[0]}! 👋</p>
               <p className="text-xs text-muted-foreground">
                 {format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p>
-                <p className="text-xl font-bold text-foreground flex items-center justify-center gap-1">
-                  <Package className="h-4 w-4 text-primary" /> {paradas.length}
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 rounded-xl bg-card/70 border border-border p-3 text-center shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total</p>
+                <p className="text-2xl font-extrabold text-foreground flex items-center justify-center gap-1.5 mt-1">
+                  <Package className="h-5 w-5 text-primary" /> {paradas.length}
                 </p>
               </div>
-              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pendentes</p>
-                <p className="text-xl font-bold text-primary">{pendentes}</p>
+              <div className="flex-1 rounded-xl bg-primary/10 border border-primary/30 p-3 text-center shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-primary font-semibold">Pendentes</p>
+                <p className="text-2xl font-extrabold text-primary mt-1">{pendentes}</p>
               </div>
-              <div className="flex-1 rounded-lg bg-card/60 border border-border p-2 text-center">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Entregues</p>
-                <p className="text-xl font-bold text-success">{concluidas}</p>
+              <div className="flex-1 rounded-xl bg-success/10 border border-success/30 p-3 text-center shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-success font-semibold">Entregues</p>
+                <p className="text-2xl font-extrabold text-success mt-1">{concluidas}</p>
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-muted-foreground">Progresso da rota</span>
+                <span className="font-bold text-foreground">
+                  {paradas.length > 0 ? Math.round((concluidas / paradas.length) * 100) : 0}%
+                </span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-muted overflow-hidden border border-border/50">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-success transition-all duration-700 ease-out"
+                  style={{ width: `${paradas.length > 0 ? (concluidas / paradas.length) * 100 : 0}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center">
+                {concluidas} de {paradas.length} entregas finalizadas
+              </p>
+            </div>
+
             {remainingStops.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="lg" className="w-full h-11 text-base font-semibold">
+                  <Button size="lg" className="w-full h-12 text-base font-semibold shadow">
                     <Play className="h-4 w-4 mr-2" /> Iniciar rota ({remainingStops.length} paradas)
                   </Button>
                 </DropdownMenuTrigger>
