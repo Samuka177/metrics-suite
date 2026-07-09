@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MapPin, LogOut, CheckCircle2, XCircle, PenLine, Navigation, Phone, Clock, FileText, MessageSquare, Play, Package } from 'lucide-react';
+import { MapPin, LogOut, CheckCircle2, XCircle, PenLine, Navigation, Phone, Clock, FileText, MessageSquare, Play, Package, AlertTriangle, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import SignaturePad from '@/components/motorista/SignaturePad';
 import { useGpsTracker } from '@/hooks/useGpsTracker';
@@ -45,10 +45,12 @@ export default function MotoristaApp() {
   const [loading, setLoading] = useState(true);
   const [activeSig, setActiveSig] = useState<Parada | null>(null);
   const [activeFail, setActiveFail] = useState<Parada | null>(null);
+  const [confirmEntrega, setConfirmEntrega] = useState<Parada | null>(null);
   const [failMotivo, setFailMotivo] = useState('cliente_ausente');
   const [failObs, setFailObs] = useState('');
   const [notifs, setNotifs] = useState<{ id: string; tipo: string; titulo: string; mensagem: string; lida: boolean; created_at: string }[]>([]);
-
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
 
   const MOTIVOS_FALHA = [
     { v: 'cliente_recusou', l: 'Cliente recusou' },
@@ -58,12 +60,10 @@ export default function MotoristaApp() {
     { v: 'outros', l: 'Outros' },
   ];
 
-  const today = format(new Date(), 'yyyy-MM-dd');
-
+  // Resolve motorista + datas disponíveis
   useEffect(() => {
     if (!user) return;
     (async () => {
-      // Encontrar motorista vinculado por user_id ou email
       let { data: mot } = await supabase.from('motoristas').select('*').eq('user_id', user.id).maybeSingle();
       if (!mot && profile?.email) {
         const { data: byEmail } = await supabase.from('motoristas').select('*').eq('email', profile.email).maybeSingle();
@@ -76,17 +76,53 @@ export default function MotoristaApp() {
       setMotoristaId(mot.id);
       setMotoristaNome(mot.nome);
 
-      const { data: ps } = await supabase.from('paradas')
-        .select('*')
+      // Datas com paradas atribuídas a esse motorista
+      const { data: dts } = await supabase.from('paradas')
+        .select('data_rota')
         .eq('motorista_id', mot.id)
-        .eq('data_rota', today)
-        .order('ordem', { ascending: true });
-      setParadas((ps || []) as Parada[]);
+        .order('data_rota', { ascending: false });
+      const uniq = Array.from(new Set((dts || []).map((d: any) => d.data_rota).filter(Boolean)));
+      setAvailableDates(uniq);
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const initial = uniq.includes(today) ? today : (uniq[0] || today);
+      setSelectedDate(initial);
       setLoading(false);
     })();
-  }, [user, profile?.email, today]);
+  }, [user, profile?.email]);
 
-  // Rastreamento GPS ao vivo: ativo enquanto houver paradas pendentes/em andamento hoje
+  // Carrega paradas para data selecionada
+  const reload = async () => {
+    if (!motoristaId) return;
+    const { data: ps } = await supabase.from('paradas')
+      .select('*')
+      .eq('motorista_id', motoristaId)
+      .eq('data_rota', selectedDate)
+      .order('ordem', { ascending: true });
+    setParadas((ps || []) as Parada[]);
+  };
+
+  useEffect(() => {
+    if (motoristaId && selectedDate) { reload(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motoristaId, selectedDate]);
+
+  // Realtime: atualiza paradas ao vivo
+  useEffect(() => {
+    if (!motoristaId) return;
+    const ch = supabase.channel(`paradas-${motoristaId}-${selectedDate}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'paradas', filter: `motorista_id=eq.${motoristaId}` },
+        (payload: any) => {
+          const row = (payload.new || payload.old) as any;
+          if (row?.data_rota !== selectedDate) return;
+          reload();
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motoristaId, selectedDate]);
+
+  // GPS
   const hasActiveStops = paradas.some(p => p.status === 'pendente' || p.status === 'em_andamento');
   useGpsTracker({
     active: hasActiveStops,
@@ -95,7 +131,7 @@ export default function MotoristaApp() {
     intervalMs: 30000,
   });
 
-  // Notificações para o motorista (reagendamentos/falhas)
+  // Notificações
   useEffect(() => {
     if (!motoristaId) return;
     const load = async () => {
@@ -123,20 +159,8 @@ export default function MotoristaApp() {
     return () => { supabase.removeChannel(ch); };
   }, [motoristaId]);
 
-
-  const reload = async () => {
-    if (!motoristaId) return;
-    const { data: ps } = await supabase.from('paradas')
-      .select('*').eq('motorista_id', motoristaId).eq('data_rota', today)
-      .order('ordem', { ascending: true });
-    setParadas((ps || []) as Parada[]);
-  };
-
   const doCheckin = async (p: Parada) => {
     const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(() => {}, () => {});
-    }
     const { error } = await supabase.from('paradas')
       .update({ status: 'em_andamento', checkin_time: time })
       .eq('id', p.id);
@@ -151,7 +175,11 @@ export default function MotoristaApp() {
       .update({ status: 'entregue', checkout_time: time })
       .eq('id', p.id);
     if (error) return toast.error(error.message);
-    toast.success('Entrega confirmada');
+    const novosPendentes = paradas.filter(x => x.id !== p.id && (x.status === 'pendente' || x.status === 'em_andamento')).length;
+    toast.success('Entrega confirmada!', {
+      description: `Restam ${novosPendentes} entrega${novosPendentes === 1 ? '' : 's'} pendente${novosPendentes === 1 ? '' : 's'}.`,
+    });
+    setConfirmEntrega(null);
     reload();
   };
 
@@ -174,20 +202,23 @@ export default function MotoristaApp() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
+  const hasCoords = (p: Parada) => p.lat != null && p.lng != null;
+
   const addressOf = (p: Parada) =>
-    p.lat && p.lng
+    hasCoords(p)
       ? `${p.lat},${p.lng}`
       : [p.endereco, p.municipio, p.uf].filter(Boolean).join(', ');
 
-  // Rota completa: apenas paradas ainda pendentes/em andamento, na ordem
+  // Paradas restantes e próxima
   const remainingStops = paradas.filter(p => p.status === 'pendente' || p.status === 'em_andamento');
+  const nextStop = remainingStops[0] || null;
+  const semCoords = paradas.filter(p => !hasCoords(p) && p.status !== 'entregue' && p.status !== 'nao_realizada');
 
   const startFullRouteGoogle = () => {
-    if (remainingStops.length === 0) {
-      toast.info('Nenhuma parada pendente para navegar');
-      return;
-    }
-    const stops = remainingStops.map(addressOf).map(encodeURIComponent);
+    const roteaveis = remainingStops.filter(hasCoords).length > 0 ? remainingStops : remainingStops;
+    // Usa endereços mesmo sem coordenadas — google resolve
+    if (roteaveis.length === 0) { toast.info('Nenhuma parada pendente para navegar'); return; }
+    const stops = roteaveis.map(addressOf).map(encodeURIComponent);
     const destination = stops[stops.length - 1];
     const waypoints = stops.slice(0, -1).join('|');
     const url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${destination}` +
@@ -196,12 +227,9 @@ export default function MotoristaApp() {
   };
 
   const startFullRouteWaze = () => {
-    // Waze não suporta múltiplos waypoints — abre a próxima parada pendente
     const next = remainingStops[0];
     if (!next) { toast.info('Nenhuma parada pendente'); return; }
-    const q = next.lat && next.lng
-      ? `ll=${next.lat},${next.lng}`
-      : `q=${encodeURIComponent(addressOf(next))}`;
+    const q = hasCoords(next) ? `ll=${next.lat},${next.lng}` : `q=${encodeURIComponent(addressOf(next))}`;
     window.open(`https://waze.com/ul?${q}&navigate=yes`, '_blank');
     if (remainingStops.length > 1) {
       toast.message('Waze aberto para a próxima parada', {
@@ -226,6 +254,11 @@ export default function MotoristaApp() {
 
   const pendentes = paradas.filter(p => p.status === 'pendente' || p.status === 'em_andamento').length;
   const concluidas = paradas.filter(p => p.status === 'entregue').length;
+  const falhas = paradas.filter(p => p.status === 'nao_realizada').length;
+  const total = paradas.length;
+  const percent = total > 0 ? Math.round((concluidas / total) * 100) : 0;
+
+  const dateOptions = availableDates.length > 0 ? availableDates : [selectedDate];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -233,35 +266,50 @@ export default function MotoristaApp() {
         <div>
           <h1 className="text-base font-bold text-foreground leading-tight">Olá, {motoristaNome.split(' ')[0]}</h1>
           <p className="text-[11px] text-muted-foreground">
-            {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })} · {concluidas}/{paradas.length} entregas
+            {format(parseISO(selectedDate), "EEEE, dd 'de' MMMM", { locale: ptBR })} · {concluidas}/{total} entregas
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={signOut}><LogOut className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sair"><LogOut className="h-4 w-4" /></Button>
       </header>
 
       <main className="flex-1 overflow-y-auto p-3 space-y-3 pb-6">
-        {/* Boas-vindas + resumo + iniciar rota completa */}
+        {/* Boas-vindas */}
         <Card className="bg-gradient-to-br from-primary/20 to-secondary/15 border-primary/40 shadow-lg">
           <CardContent className="p-4 space-y-4">
-            <div className="space-y-0.5">
-              <p className="text-xl font-bold text-foreground">Bem-vindo, {motoristaNome.split(' ')[0]}! 👋</p>
-              <p className="text-xs text-muted-foreground">
-                {format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-              </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <p className="text-xl font-bold text-foreground">Bem-vindo, {motoristaNome.split(' ')[0]}! 👋</p>
+                <p className="text-xs text-muted-foreground">
+                  {format(parseISO(selectedDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </p>
+              </div>
+              <div className="min-w-[140px]">
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Data da rota</label>
+                <Select value={selectedDate} onValueChange={setSelectedDate}>
+                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {dateOptions.map(d => (
+                      <SelectItem key={d} value={d} className="text-xs">
+                        {format(parseISO(d), "dd/MM/yyyy", { locale: ptBR })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex-1 rounded-xl bg-card/70 border border-border p-3 text-center shadow-sm">
+              <div className="flex-1 rounded-xl bg-card/70 border border-border p-3 text-center shadow-sm" aria-label={`Total de ${total} entregas`}>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total</p>
                 <p className="text-2xl font-extrabold text-foreground flex items-center justify-center gap-1.5 mt-1">
-                  <Package className="h-5 w-5 text-primary" /> {paradas.length}
+                  <Package className="h-5 w-5 text-primary" aria-hidden /> {total}
                 </p>
               </div>
-              <div className="flex-1 rounded-xl bg-primary/10 border border-primary/30 p-3 text-center shadow-sm">
+              <div className="flex-1 rounded-xl bg-primary/10 border border-primary/30 p-3 text-center shadow-sm" aria-label={`${pendentes} pendentes`}>
                 <p className="text-[10px] uppercase tracking-wider text-primary font-semibold">Pendentes</p>
                 <p className="text-2xl font-extrabold text-primary mt-1">{pendentes}</p>
               </div>
-              <div className="flex-1 rounded-xl bg-success/10 border border-success/30 p-3 text-center shadow-sm">
+              <div className="flex-1 rounded-xl bg-success/10 border border-success/30 p-3 text-center shadow-sm" aria-label={`${concluidas} entregues`}>
                 <p className="text-[10px] uppercase tracking-wider text-success font-semibold">Entregues</p>
                 <p className="text-2xl font-extrabold text-success mt-1">{concluidas}</p>
               </div>
@@ -270,18 +318,26 @@ export default function MotoristaApp() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium text-muted-foreground">Progresso da rota</span>
-                <span className="font-bold text-foreground">
-                  {paradas.length > 0 ? Math.round((concluidas / paradas.length) * 100) : 0}%
+                <span className="font-bold text-foreground" aria-live="polite">
+                  {percent}%
                 </span>
               </div>
-              <div className="h-3 w-full rounded-full bg-muted overflow-hidden border border-border/50">
+              <div
+                className="h-3 w-full rounded-full bg-muted overflow-hidden border border-border/50"
+                role="progressbar"
+                aria-valuenow={percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`Progresso da rota: ${concluidas} de ${total} entregas concluídas, ${pendentes} pendentes`}
+              >
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-primary to-success transition-all duration-700 ease-out"
-                  style={{ width: `${paradas.length > 0 ? (concluidas / paradas.length) * 100 : 0}%` }}
+                  style={{ width: `${percent}%` }}
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground text-center">
-                {concluidas} de {paradas.length} entregas finalizadas
+              <p className="text-[11px] text-muted-foreground text-center" aria-live="polite">
+                <strong className="text-success">{concluidas}</strong> de <strong className="text-foreground">{total}</strong> entregues · <strong className="text-primary">{pendentes}</strong> pendente{pendentes === 1 ? '' : 's'}
+                {falhas > 0 && <> · <strong className="text-destructive">{falhas}</strong> falha{falhas === 1 ? '' : 's'}</>}
               </p>
             </div>
 
@@ -305,26 +361,83 @@ export default function MotoristaApp() {
           </CardContent>
         </Card>
 
+        {/* Avisos de endereços sem coordenadas */}
+        {semCoords.length > 0 && (
+          <Card className="border-warning/50 bg-warning/10">
+            <CardContent className="p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <p className="text-xs font-bold text-foreground">
+                  {semCoords.length} endereço{semCoords.length === 1 ? '' : 's'} sem localização precisa
+                </p>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                A rota foi calculada para os demais. Peça revisão dos endereços abaixo:
+              </p>
+              <ul className="text-[11px] space-y-0.5 pl-1">
+                {semCoords.map(p => (
+                  <li key={p.id} className="text-foreground">
+                    • <strong>{p.nome}</strong> — {[p.endereco, p.municipio, p.uf].filter(Boolean).join(', ') || 'sem endereço'}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Próxima parada em destaque */}
+        {nextStop && (
+          <Card className="border-primary/60 bg-primary/5 shadow-md ring-1 ring-primary/30">
+            <CardContent className="p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-primary text-primary-foreground text-[10px] h-5"><Star className="h-3 w-3 mr-1" /> PRÓXIMA PARADA</Badge>
+                {nextStop.status === 'em_andamento' && <Badge variant="outline" className="text-[10px] h-5">Em andamento</Badge>}
+              </div>
+              <div>
+                <p className="font-bold text-sm text-foreground">{nextStop.nome}</p>
+                <p className="text-xs text-muted-foreground flex items-start gap-1">
+                  <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
+                  <span>{[nextStop.endereco, nextStop.municipio, nextStop.uf].filter(Boolean).join(', ') || 'Endereço não informado'}</span>
+                </p>
+                {nextStop.observacoes && (
+                  <div className="mt-1.5 flex items-start gap-1.5 bg-warning/15 border border-warning/40 rounded px-2 py-1">
+                    <Badge className="bg-warning text-warning-foreground text-[9px] shrink-0 h-4">OBS</Badge>
+                    <p className="text-[11px] text-foreground font-semibold leading-tight">{nextStop.observacoes}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {paradas.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-            Nenhuma parada atribuída hoje.
+            Nenhuma parada atribuída para esta data.
           </CardContent></Card>
         ) : (
           <>
-
             {paradas.map((p, idx) => {
               const isDone = p.status === 'entregue';
               const isFail = p.status === 'nao_realizada';
               const inProgress = p.status === 'em_andamento';
+              const isNext = nextStop?.id === p.id;
               return (
-                <Card key={p.id} className={`fade-in ${isDone ? 'opacity-70' : ''} ${isFail ? 'border-destructive/50' : ''}`}>
+                <Card key={p.id} className={`fade-in ${isDone ? 'opacity-70' : ''} ${isFail ? 'border-destructive/50' : ''} ${isNext ? 'ring-2 ring-primary/40' : ''}`}>
                   <CardContent className="p-3 space-y-2">
                     <div className="flex items-start gap-2">
-                      <div className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
+                      <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isNext ? 'bg-primary text-primary-foreground animate-pulse' : 'bg-primary/80 text-primary-foreground'}`}>
                         {idx + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-foreground">{p.nome}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-sm text-foreground">{p.nome}</p>
+                          {isNext && <Badge className="bg-primary text-primary-foreground text-[9px] h-4">PRÓXIMA</Badge>}
+                          {!hasCoords(p) && !isDone && !isFail && (
+                            <Badge variant="outline" className="text-[9px] h-4 border-warning text-warning">
+                              <AlertTriangle className="h-2.5 w-2.5 mr-0.5" /> sem GPS
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground flex items-start gap-1">
                           <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
                           <span>{[p.endereco, p.municipio, p.uf].filter(Boolean).join(', ')}</span>
@@ -351,7 +464,7 @@ export default function MotoristaApp() {
                         <Button size="sm" className="h-7 text-xs" onClick={() => doCheckin(p)}>Check-in</Button>
                       )}
                       {!isDone && !isFail && (
-                        <Button size="sm" className="h-7 text-xs bg-success hover:bg-success/90 text-success-foreground" onClick={() => doEntregue(p)}>
+                        <Button size="sm" className="h-7 text-xs bg-success hover:bg-success/90 text-success-foreground" onClick={() => setConfirmEntrega(p)}>
                           <CheckCircle2 className="h-3 w-3 mr-1" /> Entregue
                         </Button>
                       )}
@@ -400,6 +513,44 @@ export default function MotoristaApp() {
           onSaved={() => reload()}
         />
       )}
+
+      {/* Confirmação de entrega */}
+      <Dialog open={!!confirmEntrega} onOpenChange={(o) => { if (!o) setConfirmEntrega(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar entrega?</DialogTitle>
+            <DialogDescription>Esta ação marca a parada como entregue e atualiza o progresso da rota.</DialogDescription>
+          </DialogHeader>
+          {confirmEntrega && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <p className="font-semibold text-sm text-foreground">{confirmEntrega.nome}</p>
+                <p className="text-xs text-muted-foreground">{[confirmEntrega.endereco, confirmEntrega.municipio, confirmEntrega.uf].filter(Boolean).join(', ')}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-primary/10 border border-primary/30 p-2 text-center">
+                  <p className="text-muted-foreground">Pendentes</p>
+                  <p className="font-bold text-primary">
+                    {pendentes} <span className="text-muted-foreground">→</span> <span className="text-foreground">{Math.max(0, pendentes - 1)}</span>
+                  </p>
+                </div>
+                <div className="rounded-lg bg-success/10 border border-success/30 p-2 text-center">
+                  <p className="text-muted-foreground">Entregues</p>
+                  <p className="font-bold text-success">
+                    {concluidas} <span className="text-muted-foreground">→</span> <span className="text-foreground">{concluidas + 1}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmEntrega(null)}>Cancelar</Button>
+            <Button className="bg-success hover:bg-success/90 text-success-foreground" onClick={() => confirmEntrega && doEntregue(confirmEntrega)}>
+              <CheckCircle2 className="h-4 w-4 mr-1" /> Confirmar entrega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!activeFail} onOpenChange={(o) => { if (!o) { setActiveFail(null); setFailMotivo('cliente_ausente'); setFailObs(''); } }}>
         <DialogContent>
