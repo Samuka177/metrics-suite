@@ -171,10 +171,20 @@ export default function MotoristaApp() {
 
   const doEntregue = async (p: Parada) => {
     const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const prev = paradas;
+    // Otimista
+    setParadas(cur => cur.map(x => x.id === p.id ? { ...x, status: 'entregue', checkout_time: time } : x));
     const { error } = await supabase.from('paradas')
       .update({ status: 'entregue', checkout_time: time })
       .eq('id', p.id);
-    if (error) return toast.error(error.message);
+    if (error) {
+      setParadas(prev); // rollback
+      toast.error('Não foi possível marcar como entregue', {
+        description: error.message,
+        action: { label: 'Tentar novamente', onClick: () => doEntregue(p) },
+      });
+      return;
+    }
     const novosPendentes = paradas.filter(x => x.id !== p.id && (x.status === 'pendente' || x.status === 'em_andamento')).length;
     toast.success('Entrega confirmada!', {
       description: `Restam ${novosPendentes} entrega${novosPendentes === 1 ? '' : 's'} pendente${novosPendentes === 1 ? '' : 's'}.`,
@@ -215,22 +225,30 @@ export default function MotoristaApp() {
   const semCoords = paradas.filter(p => !hasCoords(p) && p.status !== 'entregue' && p.status !== 'nao_realizada');
 
   const startFullRouteGoogle = () => {
-    const roteaveis = remainingStops.filter(hasCoords).length > 0 ? remainingStops : remainingStops;
-    // Usa endereços mesmo sem coordenadas — google resolve
-    if (roteaveis.length === 0) { toast.info('Nenhuma parada pendente para navegar'); return; }
-    const stops = roteaveis.map(addressOf).map(encodeURIComponent);
-    const destination = stops[stops.length - 1];
-    const waypoints = stops.slice(0, -1).join('|');
-    const url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${destination}` +
-      (waypoints ? `&waypoints=${waypoints}` : '');
-    window.open(url, '_blank');
+    if (remainingStops.length === 0) { toast.info('Nenhuma parada pendente para navegar'); return; }
+    // Formato path-based do Google Maps: aceita endereços/coords separados por "/"
+    // e inicia navegação a partir da localização atual do usuário.
+    const parts = remainingStops.map(addressOf).map(encodeURIComponent);
+    // Limite prático: Google Maps aceita ~9 waypoints via URL
+    const limited = parts.slice(0, 9);
+    if (parts.length > 9) {
+      toast.warning('Google Maps aceita até 9 paradas por rota', {
+        description: `Abrindo as primeiras 9 de ${parts.length}. Concluídas somem automaticamente.`,
+      });
+    }
+    const url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate` +
+      `&destination=${limited[limited.length - 1]}` +
+      (limited.length > 1 ? `&waypoints=${limited.slice(0, -1).join('%7C')}` : '');
+    window.open(url, '_blank', 'noopener');
   };
 
   const startFullRouteWaze = () => {
     const next = remainingStops[0];
     if (!next) { toast.info('Nenhuma parada pendente'); return; }
-    const q = hasCoords(next) ? `ll=${next.lat},${next.lng}` : `q=${encodeURIComponent(addressOf(next))}`;
-    window.open(`https://waze.com/ul?${q}&navigate=yes`, '_blank');
+    const url = hasCoords(next)
+      ? `https://www.waze.com/ul?ll=${next.lat}%2C${next.lng}&navigate=yes&zoom=17`
+      : `https://www.waze.com/ul?q=${encodeURIComponent(addressOf(next))}&navigate=yes`;
+    window.open(url, '_blank', 'noopener');
     if (remainingStops.length > 1) {
       toast.message('Waze aberto para a próxima parada', {
         description: 'Waze não permite múltiplos destinos — repita ao concluir cada entrega.',
@@ -341,7 +359,7 @@ export default function MotoristaApp() {
               </p>
             </div>
 
-            {remainingStops.length > 0 && (
+            {remainingStops.length > 0 ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="lg" className="w-full h-12 text-base font-semibold shadow">
@@ -357,7 +375,17 @@ export default function MotoristaApp() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
+            ) : total > 0 ? (
+              <div className="rounded-xl border-2 border-success/50 bg-success/10 p-4 text-center space-y-2">
+                <CheckCircle2 className="h-10 w-10 text-success mx-auto" />
+                <p className="text-lg font-bold text-foreground">Rota concluída! 🎉</p>
+                <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+                  <div><p className="text-muted-foreground">Entregues</p><p className="text-xl font-extrabold text-success">{concluidas}</p></div>
+                  <div><p className="text-muted-foreground">Falhas</p><p className="text-xl font-extrabold text-destructive">{falhas}</p></div>
+                  <div><p className="text-muted-foreground">Total</p><p className="text-xl font-extrabold text-foreground">{total}</p></div>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

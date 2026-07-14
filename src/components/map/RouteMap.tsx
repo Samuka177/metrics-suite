@@ -81,17 +81,9 @@ export default function RouteMap({ paradas, motoristas = [], onReorder, highligh
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
 
-  const getPos = useCallback((p: Parada, i: number): LatLngTuple => {
+  const getPos = useCallback((p: Parada): LatLngTuple | null => {
     if (p.lat != null && p.lng != null) return [p.lat, p.lng];
-
-    let hash = 0;
-    for (let c = 0; c < p.nome.length; c++) {
-      hash = ((hash << 5) - hash + p.nome.charCodeAt(c)) | 0;
-    }
-
-    const lat = DEFAULT_CENTER[0] + (((hash % 100) / 100) * 0.08 - 0.04) + (i * 0.005);
-    const lng = DEFAULT_CENTER[1] + ((((hash >> 8) % 100) / 100) * 0.08 - 0.04) + (i * 0.003);
-    return [lat, lng];
+    return null;
   }, []);
 
   useEffect(() => {
@@ -131,11 +123,9 @@ export default function RouteMap({ paradas, motoristas = [], onReorder, highligh
 
     layerGroup.clearLayers();
 
-    const positions = paradas.map((parada, index) => ({
-      parada,
-      index,
-      pos: getPos(parada, index),
-    }));
+    const positions = paradas
+      .map((parada, index) => ({ parada, index, pos: getPos(parada) }))
+      .filter((x): x is { parada: Parada; index: number; pos: LatLngTuple } => x.pos !== null);
 
     const allPos = positions.map(({ pos }) => pos);
     const motoristaMap = new Map(motoristas.map((motorista) => [motorista.id, motorista.cor]));
