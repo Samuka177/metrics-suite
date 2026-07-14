@@ -171,10 +171,20 @@ export default function MotoristaApp() {
 
   const doEntregue = async (p: Parada) => {
     const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const prev = paradas;
+    // Otimista
+    setParadas(cur => cur.map(x => x.id === p.id ? { ...x, status: 'entregue', checkout_time: time } : x));
     const { error } = await supabase.from('paradas')
       .update({ status: 'entregue', checkout_time: time })
       .eq('id', p.id);
-    if (error) return toast.error(error.message);
+    if (error) {
+      setParadas(prev); // rollback
+      toast.error('Não foi possível marcar como entregue', {
+        description: error.message,
+        action: { label: 'Tentar novamente', onClick: () => doEntregue(p) },
+      });
+      return;
+    }
     const novosPendentes = paradas.filter(x => x.id !== p.id && (x.status === 'pendente' || x.status === 'em_andamento')).length;
     toast.success('Entrega confirmada!', {
       description: `Restam ${novosPendentes} entrega${novosPendentes === 1 ? '' : 's'} pendente${novosPendentes === 1 ? '' : 's'}.`,
