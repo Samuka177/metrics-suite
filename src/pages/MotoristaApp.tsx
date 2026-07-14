@@ -225,22 +225,30 @@ export default function MotoristaApp() {
   const semCoords = paradas.filter(p => !hasCoords(p) && p.status !== 'entregue' && p.status !== 'nao_realizada');
 
   const startFullRouteGoogle = () => {
-    const roteaveis = remainingStops.filter(hasCoords).length > 0 ? remainingStops : remainingStops;
-    // Usa endereços mesmo sem coordenadas — google resolve
-    if (roteaveis.length === 0) { toast.info('Nenhuma parada pendente para navegar'); return; }
-    const stops = roteaveis.map(addressOf).map(encodeURIComponent);
-    const destination = stops[stops.length - 1];
-    const waypoints = stops.slice(0, -1).join('|');
-    const url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${destination}` +
-      (waypoints ? `&waypoints=${waypoints}` : '');
-    window.open(url, '_blank');
+    if (remainingStops.length === 0) { toast.info('Nenhuma parada pendente para navegar'); return; }
+    // Formato path-based do Google Maps: aceita endereços/coords separados por "/"
+    // e inicia navegação a partir da localização atual do usuário.
+    const parts = remainingStops.map(addressOf).map(encodeURIComponent);
+    // Limite prático: Google Maps aceita ~9 waypoints via URL
+    const limited = parts.slice(0, 9);
+    if (parts.length > 9) {
+      toast.warning('Google Maps aceita até 9 paradas por rota', {
+        description: `Abrindo as primeiras 9 de ${parts.length}. Concluídas somem automaticamente.`,
+      });
+    }
+    const url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate` +
+      `&destination=${limited[limited.length - 1]}` +
+      (limited.length > 1 ? `&waypoints=${limited.slice(0, -1).join('%7C')}` : '');
+    window.open(url, '_blank', 'noopener');
   };
 
   const startFullRouteWaze = () => {
     const next = remainingStops[0];
     if (!next) { toast.info('Nenhuma parada pendente'); return; }
-    const q = hasCoords(next) ? `ll=${next.lat},${next.lng}` : `q=${encodeURIComponent(addressOf(next))}`;
-    window.open(`https://waze.com/ul?${q}&navigate=yes`, '_blank');
+    const url = hasCoords(next)
+      ? `https://www.waze.com/ul?ll=${next.lat}%2C${next.lng}&navigate=yes&zoom=17`
+      : `https://www.waze.com/ul?q=${encodeURIComponent(addressOf(next))}&navigate=yes`;
+    window.open(url, '_blank', 'noopener');
     if (remainingStops.length > 1) {
       toast.message('Waze aberto para a próxima parada', {
         description: 'Waze não permite múltiplos destinos — repita ao concluir cada entrega.',
