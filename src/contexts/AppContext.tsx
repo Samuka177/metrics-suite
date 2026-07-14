@@ -46,6 +46,7 @@ interface AppContextType {
 
   distribuirAutomaticamente: () => Promise<void>;
   atribuirParada: (paradaId: string, motoristaId: string | undefined) => Promise<void>;
+  regeocodePendentes: () => Promise<{ ok: number; fail: number }>;
 
   undo: () => void;
   redo: () => void;
@@ -483,6 +484,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setParadas(prev => prev.map(p => p.id === paradaId ? { ...p, motoristaId } : p));
   };
 
+  const regeocodePendentes: AppContextType['regeocodePendentes'] = async () => {
+    const alvo = paradas.filter(p => (p.lat == null || p.lng == null) && p.endereco);
+    let ok = 0, fail = 0;
+    for (const p of alvo) {
+      const coords = await geocodeAddress(p.endereco);
+      if (coords) {
+        await supabase.from('paradas').update({ lat: coords.lat, lng: coords.lng }).eq('id', p.id);
+        setParadas(prev => calcETAs(prev.map(x => x.id === p.id ? { ...x, ...coords } : x), config.velocidadeMedia));
+        ok++;
+      } else {
+        fail++;
+      }
+      await new Promise(r => setTimeout(r, 1100));
+    }
+    return { ok, fail };
+  };
+
+
   const undo = () => {
     if (!undoStack.length) return;
     const prev = undoStack[undoStack.length - 1];
@@ -505,7 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addMotorista, updateMotorista, removeMotorista,
       roteirizar, otimizarRota, resetarRota, carregarDemo, setConfig,
       iniciarRota, pararRota, marcarEntregue, marcarFalha, reagendarParada,
-      distribuirAutomaticamente, atribuirParada,
+      distribuirAutomaticamente, atribuirParada, regeocodePendentes,
       undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,
     }}>
       {children}

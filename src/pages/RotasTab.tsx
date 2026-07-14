@@ -479,8 +479,22 @@ export default function RotasTab() {
     paradas, motoristas, otimizarRota, reorderParadas,
     lastOptimization, executionMode, currentStopIndex, capacityWarnings,
     iniciarRota, pararRota, distribuirAutomaticamente, historyActions,
-    undo, redo, canUndo, canRedo, config, setConfig,
+    undo, redo, canUndo, canRedo, config, setConfig, regeocodePendentes,
   } = useApp();
+  const [regeocoding, setRegeocoding] = useState(false);
+  const semCoords = paradas.filter(p => p.lat == null || p.lng == null);
+
+  const handleRegeocode = async () => {
+    setRegeocoding(true);
+    toast.info(`Localizando ${semCoords.length} endereço(s)…`, { description: 'Pode levar alguns segundos por parada.' });
+    try {
+      const { ok, fail } = await regeocodePendentes();
+      if (ok > 0) toast.success(`${ok} endereço(s) localizados no mapa`);
+      if (fail > 0) toast.warning(`${fail} endereço(s) sem localização`, { description: 'Revise o endereço na aba Revisar endereços.' });
+    } finally {
+      setRegeocoding(false);
+    }
+  };
   const [showMap, setShowMap] = useState(true);
   const [showImport, setShowImport] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -544,6 +558,23 @@ export default function RotasTab() {
           <CardContent className="p-2 text-sm flex items-center justify-between">
             <span><span className="font-semibold text-primary">Otimizada!</span> <span className="text-muted-foreground">{lastOptimization.distanceBefore.toFixed(1)} → {lastOptimization.distanceAfter.toFixed(1)} km</span></span>
             <Badge className="bg-success text-success-foreground">-{lastOptimization.savings.toFixed(1)} km</Badge>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Aviso de paradas sem coordenadas */}
+      {semCoords.length > 0 && (
+        <Card className="border-warning/50 bg-warning/10">
+          <CardContent className="p-2.5 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+              <span className="text-foreground">
+                <strong>{semCoords.length}</strong> de <strong>{paradas.length}</strong> parada(s) sem localização — não aparecem no mapa.
+              </span>
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={handleRegeocode} disabled={regeocoding}>
+              <MapPin className="h-3 w-3 mr-1" /> {regeocoding ? 'Localizando…' : 'Localizar agora'}
+            </Button>
           </CardContent>
         </Card>
       )}
