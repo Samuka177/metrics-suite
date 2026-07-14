@@ -123,11 +123,9 @@ export default function RouteMap({ paradas, motoristas = [], onReorder, highligh
 
     layerGroup.clearLayers();
 
-    const positions = paradas.map((parada, index) => ({
-      parada,
-      index,
-      pos: getPos(parada, index),
-    }));
+    const positions = paradas
+      .map((parada, index) => ({ parada, index, pos: getPos(parada) }))
+      .filter((x): x is { parada: Parada; index: number; pos: LatLngTuple } => x.pos !== null);
 
     const allPos = positions.map(({ pos }) => pos);
     const motoristaMap = new Map(motoristas.map((motorista) => [motorista.id, motorista.cor]));
