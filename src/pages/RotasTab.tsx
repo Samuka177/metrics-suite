@@ -562,6 +562,23 @@ export default function RotasTab() {
         </Card>
       )}
 
+      {/* Aviso de paradas sem coordenadas */}
+      {semCoords.length > 0 && (
+        <Card className="border-warning/50 bg-warning/10">
+          <CardContent className="p-2.5 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+              <span className="text-foreground">
+                <strong>{semCoords.length}</strong> de <strong>{paradas.length}</strong> parada(s) sem localização — não aparecem no mapa.
+              </span>
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={handleRegeocode} disabled={regeocoding}>
+              <MapPin className="h-3 w-3 mr-1" /> {regeocoding ? 'Localizando…' : 'Localizar agora'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Map */}
       {showMap && paradas.length > 0 && (
         <ResizableMapWrapper>
