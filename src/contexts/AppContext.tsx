@@ -524,7 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addMotorista, updateMotorista, removeMotorista,
       roteirizar, otimizarRota, resetarRota, carregarDemo, setConfig,
       iniciarRota, pararRota, marcarEntregue, marcarFalha, reagendarParada,
-      distribuirAutomaticamente, atribuirParada,
+      distribuirAutomaticamente, atribuirParada, regeocodePendentes,
       undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,
     }}>
       {children}
