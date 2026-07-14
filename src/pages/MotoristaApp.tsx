@@ -359,7 +359,7 @@ export default function MotoristaApp() {
               </p>
             </div>
 
-            {remainingStops.length > 0 && (
+            {remainingStops.length > 0 ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="lg" className="w-full h-12 text-base font-semibold shadow">
@@ -375,7 +375,17 @@ export default function MotoristaApp() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
+            ) : total > 0 ? (
+              <div className="rounded-xl border-2 border-success/50 bg-success/10 p-4 text-center space-y-2">
+                <CheckCircle2 className="h-10 w-10 text-success mx-auto" />
+                <p className="text-lg font-bold text-foreground">Rota concluída! 🎉</p>
+                <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+                  <div><p className="text-muted-foreground">Entregues</p><p className="text-xl font-extrabold text-success">{concluidas}</p></div>
+                  <div><p className="text-muted-foreground">Falhas</p><p className="text-xl font-extrabold text-destructive">{falhas}</p></div>
+                  <div><p className="text-muted-foreground">Total</p><p className="text-xl font-extrabold text-foreground">{total}</p></div>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
