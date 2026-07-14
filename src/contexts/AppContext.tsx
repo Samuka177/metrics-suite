@@ -46,6 +46,7 @@ interface AppContextType {
 
   distribuirAutomaticamente: () => Promise<void>;
   atribuirParada: (paradaId: string, motoristaId: string | undefined) => Promise<void>;
+  regeocodePendentes: () => Promise<{ ok: number; fail: number }>;
 
   undo: () => void;
   redo: () => void;
