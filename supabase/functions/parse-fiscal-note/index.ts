@@ -281,7 +281,7 @@ Deno.serve(async (req) => {
     });
   } catch (err: any) {
     console.error("parse-fiscal-note erro:", err);
-    return new Response(JSON.stringify({ error: err.message || "Erro interno" }), {
+    return new Response(JSON.stringify({ error: "Erro interno ao processar o documento" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
