@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, Edit2, Save, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Edit2, MapPin, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { needsAddressReview } from '@/utils/addressValidation';
 import { logAction } from '@/utils/audit';
 import { supabase } from '@/integrations/supabase/client';
 import type { Parada } from '@/types/rotafacil';
+import { getAddressDiagnostics } from '@/utils/geocode';
 
 interface Props {
   open: boolean;
@@ -19,9 +20,10 @@ interface Props {
 }
 
 export default function AddressReviewDialog({ open, onOpenChange, onAllConfirmed }: Props) {
-  const { paradas, updateParada } = useApp();
+  const { paradas, updateParada, localizarParada } = useApp();
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [locatingId, setLocatingId] = useState<string | null>(null);
   const [form, setForm] = useState({ logradouro: '', numero: '', bairro: '', municipio: '', uf: '', cep: '' });
 
   useEffect(() => {
@@ -79,6 +81,21 @@ export default function AddressReviewDialog({ open, onOpenChange, onAllConfirmed
     });
   };
 
+  const handleLocalizar = async (p: Parada) => {
+    setLocatingId(p.id);
+    try {
+      const result = await localizarParada(p.id);
+      if (result.ok) {
+        setConfirmed(prev => new Set(prev).add(p.id));
+        toast.success('Parada localizada e mapa atualizado');
+      } else if (result.ok === false) {
+        toast.warning(result.reason, { description: result.suggestions[0] || 'Revise o endereço manualmente.' });
+      }
+    } finally {
+      setLocatingId(null);
+    }
+  };
+
   const allConfirmed = paradas.length > 0 && paradas.every(p => confirmed.has(p.id));
   const pendentes = paradas.filter(p => !confirmed.has(p.id)).length;
 
@@ -108,6 +125,11 @@ export default function AddressReviewDialog({ open, onOpenChange, onAllConfirmed
             const isConfirmed = confirmed.has(p.id);
             const needs = needsAddressReview(p);
             const isEditing = editingId === p.id;
+            const missingCoords = p.lat == null || p.lng == null;
+            const diagnostic = missingCoords ? {
+              reason: p.geocodeReason || getAddressDiagnostics(p.endereco).reason,
+              suggestions: p.geocodeSuggestions || getAddressDiagnostics(p.endereco).suggestions,
+            } : null;
             return (
               <Card key={p.id} className={isConfirmed ? 'border-success/40' : needs ? 'border-destructive/40' : ''}>
                 <CardContent className="p-3 space-y-2">
@@ -128,6 +150,15 @@ export default function AddressReviewDialog({ open, onOpenChange, onAllConfirmed
                     </div>
                   </div>
 
+                  {diagnostic && (
+                    <div className="rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs">
+                      <p className="font-medium text-foreground">{diagnostic.reason}</p>
+                      {diagnostic.suggestions.length > 0 && (
+                        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{diagnostic.suggestions.slice(0, 2).join(' · ')}</p>
+                      )}
+                    </div>
+                  )}
+
                   {isEditing ? (
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t">
                       <Input placeholder="Logradouro" value={form.logradouro} onChange={e => setForm(f => ({ ...f, logradouro: e.target.value }))} className="col-span-2 h-8 text-xs" />
@@ -147,6 +178,11 @@ export default function AddressReviewDialog({ open, onOpenChange, onAllConfirmed
                     </div>
                   ) : (
                     <div className="flex gap-1.5 justify-end">
+                      {missingCoords && (
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => handleLocalizar(p)} disabled={locatingId === p.id}>
+                          <MapPin className="h-3 w-3 mr-1" /> {locatingId === p.id ? 'Localizando…' : 'Localizar esta parada'}
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => startEdit(p)}>
                         <Edit2 className="h-3 w-3 mr-1" /> Editar
                       </Button>

@@ -30,6 +30,8 @@ export type Parada = {
   motoristaId?: string;
   etaMinutos?: number; // ETA calculado
   telefone?: string;
+  geocodeReason?: string;
+  geocodeSuggestions?: string[];
 };
 
 export type Motorista = {

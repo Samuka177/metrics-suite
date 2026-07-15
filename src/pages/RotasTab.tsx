@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense, memo, useCallback } from 'react';
+import { useState, lazy, Suspense, memo, useCallback, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import RouteTemplatesDialog from '@/components/routes/RouteTemplatesDialog';
 import AddressReviewDialog from '@/components/routes/AddressReviewDialog';
 import LiveTrackingPanel from '@/components/routes/LiveTrackingPanel';
 import { needsAddressReview } from '@/utils/addressValidation';
+import { getAddressDiagnostics } from '@/utils/geocode';
 
 const RouteMap = lazy(() => import('@/components/map/RouteMap'));
 import ResizableMapWrapper from '@/components/map/ResizableMapWrapper';
@@ -193,8 +194,21 @@ function EditParadaDialog({ parada, open, onOpenChange }: { parada: Parada; open
     telefone: parada.telefone || '', observacoes: parada.observacoes || '',
   });
 
-  // Reset form when opening
-  useState(() => {});
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      nome: parada.nome,
+      endereco: parada.endereco,
+      horario: parada.horario || '',
+      horarioMin: parada.horarioMin || '',
+      horarioMax: parada.horarioMax || '',
+      peso: parada.peso?.toString() || '',
+      volume: parada.volume?.toString() || '',
+      telefone: parada.telefone || '',
+      observacoes: parada.observacoes || '',
+    });
+  }, [open, parada]);
+
   const handleSave = async () => {
     if (!form.nome || !form.endereco) { toast.error('Nome e endereço são obrigatórios'); return; }
     const enderecoChanged = form.endereco !== parada.endereco;
@@ -257,8 +271,9 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
   parada: Parada; index: number; isActive: boolean;
   motoristas: { id: string; nome: string; cor: string }[];
 }) => {
-  const { updateParada, removeParada, reorderParadas, marcarEntregue, marcarFalha, reagendarParada, atribuirParada, executionMode, paradas } = useApp();
+  const { updateParada, removeParada, reorderParadas, marcarEntregue, marcarFalha, reagendarParada, atribuirParada, localizarParada, executionMode, paradas } = useApp();
   const [editing, setEditing] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [failOpen, setFailOpen] = useState(false);
   const [failMotivo, setFailMotivo] = useState<string>('cliente_ausente');
   const [failObs, setFailObs] = useState('');
@@ -269,6 +284,10 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
   });
   const st = statusConfig[parada.status];
   const motorista = motoristas.find(m => m.id === parada.motoristaId);
+  const missingCoords = parada.lat == null || parada.lng == null;
+  const geocodeInfo = missingCoords
+    ? { reason: parada.geocodeReason || getAddressDiagnostics(parada.endereco).reason, suggestions: parada.geocodeSuggestions || getAddressDiagnostics(parada.endereco).suggestions }
+    : null;
 
   const capacityWarning = (parada.peso && parada.peso > 50) || (parada.volume && parada.volume > 1);
 
@@ -293,6 +312,20 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
     await reagendarParada(parada.id, novaData);
     setRescheduleOpen(false);
     toast.success(`Entrega reagendada para ${new Date(novaData + 'T00:00').toLocaleDateString('pt-BR')}`);
+  };
+
+  const handleLocalizar = async () => {
+    setLocating(true);
+    try {
+      const result = await localizarParada(parada.id);
+      if (result.ok) {
+        toast.success('Parada localizada e mapa atualizado');
+      } else if (result.ok === false) {
+        toast.warning(result.reason, { description: result.suggestions[0] || 'Revise o endereço manualmente.' });
+      }
+    } finally {
+      setLocating(false);
+    }
   };
 
 
@@ -358,6 +391,20 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
               </div>
             )}
 
+            {missingCoords && geocodeInfo && (
+              <div className="mt-1.5 space-y-1 rounded border border-warning/30 bg-warning/10 px-2 py-1.5">
+                <div className="flex items-start gap-1.5">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-foreground">{geocodeInfo.reason}</p>
+                    {geocodeInfo.suggestions.length > 0 && (
+                      <p className="text-[10px] leading-snug text-muted-foreground">{geocodeInfo.suggestions.slice(0, 2).join(' · ')}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Action buttons */}
             <div className="flex flex-wrap gap-1 mt-2">
               {executionMode ? (
@@ -393,6 +440,11 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
                   <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1" onClick={() => setEditing(true)}>
                     <Edit2 className="h-3 w-3" />
                   </Button>
+                  {missingCoords && (
+                    <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={handleLocalizar} disabled={locating}>
+                      <MapPin className="h-3 w-3 mr-0.5" /> {locating ? 'Localizando…' : 'Localizar esta parada'}
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1 text-destructive" onClick={() => removeParada(parada.id)}>
                     <Trash2 className="h-3 w-3" />
                   </Button>
