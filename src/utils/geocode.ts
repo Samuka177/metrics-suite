@@ -66,7 +66,7 @@ export function parseEndereco(endereco: string): AddressParts {
       if (afterNumero.length >= 1) parts.municipio = afterNumero[afterNumero.length - 1];
       if (afterNumero.length >= 2) parts.bairro = afterNumero[afterNumero.length - 2];
     } else {
-      if (middle.length >= 1) parts.bairro = middle[middle.length - 2];
+      if (middle.length >= 2) parts.bairro = middle[middle.length - 2];
       if (middle.length >= 1) parts.municipio = middle[middle.length - 1];
     }
 
@@ -214,6 +214,21 @@ export async function geocodeParts(
     const results2 = await nominatimFetch({ q });
     const best2 = pickBestResult(results2, parts.uf);
     if (best2) return { lat: parseFloat(best2.lat), lng: parseFloat(best2.lon) };
+
+    // 3) Última tentativa restrita: centro da cidade/CEP correto, para manter a rota visível
+    // e nunca cair em outro estado. O card continua mostrando diagnóstico para revisão manual
+    // quando número/CEP/cidade estiverem incompletos.
+    if (parts.cep && parts.municipio && parts.uf) {
+      const results3 = await nominatimFetch({ postalcode: parts.cep, city: parts.municipio, state: parts.uf });
+      const best3 = pickBestResult(results3, parts.uf);
+      if (best3) return { lat: parseFloat(best3.lat), lng: parseFloat(best3.lon) };
+    }
+
+    if (parts.municipio && parts.uf) {
+      const results4 = await nominatimFetch({ city: parts.municipio, state: parts.uf });
+      const best4 = pickBestResult(results4, parts.uf);
+      if (best4) return { lat: parseFloat(best4.lat), lng: parseFloat(best4.lon) };
+    }
 
     return null;
   } catch {
