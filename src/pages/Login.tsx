@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Lock, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import bgAsset from '@/assets/rotiflow-bg.png.asset.json';
+import desktopBg from '@/assets/rotiflow-desktop.png.asset.json';
+import mobileBg from '@/assets/rotiflow-mobile.png.asset.json';
 
 const SUPER_EMAIL = 'admin@rotiflow.app';
 
@@ -36,11 +37,21 @@ export default function Login() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-start justify-center px-4 pt-[32vh] pb-10 bg-background bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: `url(${bgAsset.url})` }}
-    >
-      <div className="relative p-8 rounded-xl w-full max-w-md space-y-6 fade-in bg-transparent border border-white/15 backdrop-blur-md shadow-2xl">
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      <div
+        className="absolute inset-0 hidden bg-cover bg-center bg-no-repeat md:block"
+        style={{ backgroundImage: `url(${desktopBg.url})` }}
+        aria-hidden="true"
+      />
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat md:hidden"
+        style={{ backgroundImage: `url(${mobileBg.url})` }}
+        aria-hidden="true"
+      />
+      <div className="absolute inset-0 bg-background/20" aria-hidden="true" />
+
+      <main className="relative z-10 flex min-h-screen items-start justify-center px-4 pb-10 pt-[34vh] md:pt-[31vh]">
+      <div className="relative w-full max-w-md space-y-6 rounded-xl border border-border/40 bg-card/10 p-8 shadow-2xl backdrop-blur-md fade-in">
 
         <div className="flex flex-col items-center gap-2">
           <p className="text-sm text-muted-foreground text-center">
@@ -77,6 +88,7 @@ export default function Login() {
           O acesso é criado pelo administrador da plataforma. Solicite suas credenciais.
         </p>
       </div>
+      </main>
     </div>
   );
 }

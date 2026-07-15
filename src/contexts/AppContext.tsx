@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { Parada, Motorista, Produto, ConfigRota } from '@/types/rotafacil';
 import { nearestNeighborOrder, totalDistance, haversine, twoOptImprove, optimizeWithWindows, distributeWithCapacity } from '@/utils/routeOptimization';
-import { geocodeAddress } from '@/utils/geocode';
+import { geocodeAddressDetailed, getAddressDiagnostics } from '@/utils/geocode';
 import { logAction } from '@/utils/audit';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +47,7 @@ interface AppContextType {
   distribuirAutomaticamente: () => Promise<void>;
   atribuirParada: (paradaId: string, motoristaId: string | undefined) => Promise<void>;
   regeocodePendentes: () => Promise<{ ok: number; fail: number }>;
+  localizarParada: (paradaId: string) => Promise<{ ok: true } | { ok: false; reason: string; suggestions: string[] }>;
 
   undo: () => void;
   redo: () => void;
@@ -60,6 +61,8 @@ const DRIVER_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#
 const defaultConfig: ConfigRota = { velocidadeMedia: 40 };
 
 function rowToParada(r: any): Parada {
+  const semCoordenadas = r.lat == null || r.lng == null;
+  const diagnostic = semCoordenadas ? getAddressDiagnostics(r.endereco || '') : null;
   return {
     id: r.id, nome: r.nome, endereco: r.endereco || '',
     tipo: (r.tipo || 'Delivery') as any, status: r.status,
@@ -70,6 +73,8 @@ function rowToParada(r: any): Parada {
     etaMinutos: r.eta_minutos ?? undefined,
     checkinTime: r.checkin_time ?? undefined, checkoutTime: r.checkout_time ?? undefined,
     observacoes: r.observacoes ?? undefined, telefone: r.telefone ?? undefined,
+    geocodeReason: diagnostic?.reason,
+    geocodeSuggestions: diagnostic?.suggestions,
     produtos: (r.produtos || []) as Produto[],
   };
 }
@@ -167,10 +172,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addAction(`Parada "${p.nome}" adicionada`);
 
     if (novo.lat == null && novo.endereco) {
-      const coords = await geocodeAddress(novo.endereco);
-      if (coords) {
-        await supabase.from('paradas').update({ lat: coords.lat, lng: coords.lng }).eq('id', novo.id);
-        setParadas(prev => calcETAs(prev.map(x => x.id === novo.id ? { ...x, ...coords } : x), config.velocidadeMedia));
+      const result = await geocodeAddressDetailed(novo.endereco);
+      if (result.ok) {
+        await supabase.from('paradas').update({ lat: result.lat, lng: result.lng }).eq('id', novo.id);
+        setParadas(prev => calcETAs(prev.map(x => x.id === novo.id ? { ...x, lat: result.lat, lng: result.lng, geocodeReason: undefined, geocodeSuggestions: undefined } : x), config.velocidadeMedia));
+      } else if (result.ok === false) {
+        setParadas(prev => prev.map(x => x.id === novo.id ? { ...x, geocodeReason: result.reason, geocodeSuggestions: result.suggestions } : x));
       }
     }
   };
@@ -181,8 +188,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (data.nome !== undefined) dbData.nome = data.nome;
     if (data.endereco !== undefined) dbData.endereco = data.endereco;
     if (data.tipo !== undefined) dbData.tipo = data.tipo;
-    if (data.lat !== undefined) dbData.lat = data.lat;
-    if (data.lng !== undefined) dbData.lng = data.lng;
+    const hasLat = Object.prototype.hasOwnProperty.call(data, 'lat');
+    const hasLng = Object.prototype.hasOwnProperty.call(data, 'lng');
+    if (hasLat) dbData.lat = data.lat ?? null;
+    if (hasLng) dbData.lng = data.lng ?? null;
     if (data.peso !== undefined) dbData.peso = data.peso;
     if (data.volume !== undefined) dbData.volume = data.volume;
     if (data.horario !== undefined) dbData.horario = data.horario;
@@ -192,14 +201,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (data.status !== undefined) dbData.status = data.status;
     if (data.produtos !== undefined) dbData.produtos = data.produtos;
     await supabase.from('paradas').update(dbData).eq('id', id);
-    setParadas(prev => calcETAs(prev.map(p => p.id === id ? { ...p, ...data } : p), config.velocidadeMedia));
+    setParadas(prev => calcETAs(prev.map(p => p.id === id ? {
+      ...p,
+      ...data,
+      ...(hasLat || hasLng ? { geocodeReason: undefined, geocodeSuggestions: undefined } : {}),
+    } : p), config.velocidadeMedia));
 
     // Re-geocodifica quando o endereço mudou e coordenadas não foram fornecidas
-    if (data.endereco !== undefined && data.lat === undefined && data.lng === undefined) {
-      const coords = await geocodeAddress(data.endereco);
-      if (coords) {
-        await supabase.from('paradas').update({ lat: coords.lat, lng: coords.lng }).eq('id', id);
-        setParadas(prev => calcETAs(prev.map(p => p.id === id ? { ...p, ...coords } : p), config.velocidadeMedia));
+    if (data.endereco !== undefined && (!hasLat || data.lat == null || data.lng == null)) {
+      const result = await geocodeAddressDetailed(data.endereco);
+      if (result.ok) {
+        await supabase.from('paradas').update({ lat: result.lat, lng: result.lng }).eq('id', id);
+        setParadas(prev => calcETAs(prev.map(p => p.id === id ? { ...p, lat: result.lat, lng: result.lng, geocodeReason: undefined, geocodeSuggestions: undefined } : p), config.velocidadeMedia));
+      } else if (result.ok === false) {
+        setParadas(prev => prev.map(p => p.id === id ? { ...p, geocodeReason: result.reason, geocodeSuggestions: result.suggestions } : p));
       }
     }
   };
@@ -236,10 +251,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     for (const p of novos) {
       if (p.lat == null && p.endereco) {
-        const coords = await geocodeAddress(p.endereco);
-        if (coords) {
-          await supabase.from('paradas').update({ lat: coords.lat, lng: coords.lng }).eq('id', p.id);
-          setParadas(prev => calcETAs(prev.map(x => x.id === p.id ? { ...x, ...coords } : x), config.velocidadeMedia));
+        const result = await geocodeAddressDetailed(p.endereco);
+        if (result.ok) {
+          await supabase.from('paradas').update({ lat: result.lat, lng: result.lng }).eq('id', p.id);
+          setParadas(prev => calcETAs(prev.map(x => x.id === p.id ? { ...x, lat: result.lat, lng: result.lng, geocodeReason: undefined, geocodeSuggestions: undefined } : x), config.velocidadeMedia));
+        } else if (result.ok === false) {
+          setParadas(prev => prev.map(x => x.id === p.id ? { ...x, geocodeReason: result.reason, geocodeSuggestions: result.suggestions } : x));
         }
         await new Promise(r => setTimeout(r, 1100));
       }
@@ -488,17 +505,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const alvo = paradas.filter(p => (p.lat == null || p.lng == null) && p.endereco);
     let ok = 0, fail = 0;
     for (const p of alvo) {
-      const coords = await geocodeAddress(p.endereco);
-      if (coords) {
-        await supabase.from('paradas').update({ lat: coords.lat, lng: coords.lng }).eq('id', p.id);
-        setParadas(prev => calcETAs(prev.map(x => x.id === p.id ? { ...x, ...coords } : x), config.velocidadeMedia));
+      const result = await geocodeAddressDetailed(p.endereco);
+      if (result.ok) {
+        await supabase.from('paradas').update({ lat: result.lat, lng: result.lng }).eq('id', p.id);
+        setParadas(prev => calcETAs(prev.map(x => x.id === p.id ? { ...x, lat: result.lat, lng: result.lng, geocodeReason: undefined, geocodeSuggestions: undefined } : x), config.velocidadeMedia));
         ok++;
-      } else {
+      } else if (result.ok === false) {
+        setParadas(prev => prev.map(x => x.id === p.id ? { ...x, geocodeReason: result.reason, geocodeSuggestions: result.suggestions } : x));
         fail++;
       }
       await new Promise(r => setTimeout(r, 1100));
     }
     return { ok, fail };
+  };
+
+  const localizarParada: AppContextType['localizarParada'] = async (paradaId) => {
+    const parada = paradas.find(p => p.id === paradaId);
+    if (!parada?.endereco) {
+      return { ok: false, reason: 'Endereço ausente.', suggestions: ['Preencha o endereço antes de localizar esta parada.'] };
+    }
+
+    const result = await geocodeAddressDetailed(parada.endereco);
+    if (result.ok === false) {
+      setParadas(prev => prev.map(p => p.id === paradaId ? { ...p, geocodeReason: result.reason, geocodeSuggestions: result.suggestions } : p));
+      return result;
+    }
+
+    await supabase.from('paradas').update({ lat: result.lat, lng: result.lng }).eq('id', paradaId);
+    setParadas(prev => calcETAs(prev.map(p => p.id === paradaId ? { ...p, lat: result.lat, lng: result.lng, geocodeReason: undefined, geocodeSuggestions: undefined } : p), config.velocidadeMedia));
+    addAction(`Parada localizada: ${parada.nome}`);
+    return { ok: true };
   };
 
 
@@ -524,7 +560,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addMotorista, updateMotorista, removeMotorista,
       roteirizar, otimizarRota, resetarRota, carregarDemo, setConfig,
       iniciarRota, pararRota, marcarEntregue, marcarFalha, reagendarParada,
-      distribuirAutomaticamente, atribuirParada, regeocodePendentes,
+      distribuirAutomaticamente, atribuirParada, regeocodePendentes, localizarParada,
       undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,
     }}>
       {children}
