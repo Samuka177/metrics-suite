@@ -1,8 +1,16 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useAuth();
+type RequiredRole = 'admin' | 'super_admin';
+
+export default function ProtectedRoute({
+  children,
+  requiredRole,
+}: {
+  children: React.ReactNode;
+  requiredRole?: RequiredRole;
+}) {
+  const { user, profile, isAdmin, isSuperAdmin, loading } = useAuth();
 
   if (loading) {
     return (
@@ -23,6 +31,12 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
         </div>
       </div>
     );
+  }
+  if (requiredRole === 'super_admin' && !isSuperAdmin) {
+    return <Navigate to="/" replace />;
+  }
+  if (requiredRole === 'admin' && !isAdmin) {
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 }
