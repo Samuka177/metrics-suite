@@ -320,7 +320,7 @@ const StopCard = memo(({ parada, index, isActive, motoristas }: {
       const result = await localizarParada(parada.id);
       if (result.ok) {
         toast.success('Parada localizada e mapa atualizado');
-      } else {
+      } else if (result.ok === false) {
         toast.warning(result.reason, { description: result.suggestions[0] || 'Revise o endereço manualmente.' });
       }
     } finally {
