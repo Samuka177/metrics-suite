@@ -26,9 +26,10 @@ export default function App() {
           <AuthProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/admin/convites" element={<ProtectedRoute><AppProvider><ConvitesAdmin /></AppProvider></ProtectedRoute>} />
-              <Route path="/admin/empresas" element={<ProtectedRoute><AppProvider><EmpresasAdmin /></AppProvider></ProtectedRoute>} />
-              <Route path="/admin/auditoria" element={<ProtectedRoute><AppProvider><AuditoriaPage /></AppProvider></ProtectedRoute>} />
+              <Route path="/admin/convites" element={<ProtectedRoute requiredRole="super_admin"><AppProvider><ConvitesAdmin /></AppProvider></ProtectedRoute>} />
+              <Route path="/admin/empresas" element={<ProtectedRoute requiredRole="super_admin"><AppProvider><EmpresasAdmin /></AppProvider></ProtectedRoute>} />
+              <Route path="/admin/auditoria" element={<ProtectedRoute requiredRole="super_admin"><AppProvider><AuditoriaPage /></AppProvider></ProtectedRoute>} />
+
               <Route path="/motorista" element={<ProtectedRoute><MotoristaApp /></ProtectedRoute>} />
               <Route path="/*" element={<ProtectedRoute><AppProvider><AppShell /></AppProvider></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
